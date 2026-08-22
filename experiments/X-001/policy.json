@@ -1,0 +1,143 @@
+{
+  "comparison_policy": {
+    "mapping_absent_cases": [
+      "X-C-008"
+    ],
+    "propositions": {
+      "X-C-001": "the subject's evidence binding holds",
+      "X-C-002": "the subject's evidence binding holds",
+      "X-C-003": "the subject's evidence binding holds",
+      "X-C-004": "the subject's evidence binding holds",
+      "X-C-005": "the subject's evidence binding holds",
+      "X-C-006": "the subject's evidence binding holds",
+      "X-C-007": "the subject's evidence binding holds",
+      "X-C-008": "the subject's evidence binding holds"
+    },
+    "stance_maps": {
+      "GLYPHLOCK": {
+        "denies_values": [
+          "GLYPH_BROKEN",
+          "GLYPH_REFUSED"
+        ],
+        "not_expressible_values": [
+          "GLYPH_NO_ANALOGUE"
+        ],
+        "result_path": "seal-state",
+        "supports_values": [
+          "GLYPH_SEALED"
+        ],
+        "undetermined_values": [
+          "GLYPH_PARTIAL"
+        ]
+      },
+      "WEXP": {
+        "denies_values": [
+          "COMMITMENT_MISMATCH"
+        ],
+        "result_path": "status",
+        "supports_values": [
+          "VERIFIED"
+        ],
+        "undetermined_values": []
+      }
+    }
+  },
+  "experiment_id": "X-001",
+  "independence_policy": {
+    "constraints": {
+      "expectation_GLYPHLOCK": {
+        "allowed_inputs": [
+          "GLYPHLOCK.authority",
+          "frozen_cases"
+        ],
+        "forbidden_inputs": [
+          "WEXP.expectation",
+          "WEXP.execution_output",
+          "GLYPHLOCK.execution_output"
+        ],
+        "required_clean_room_package": true,
+        "required_role_separation": [
+          [
+            "expectation_author",
+            "implementation_operator"
+          ]
+        ]
+      },
+      "expectation_WEXP": {
+        "allowed_inputs": [
+          "WEXP.authority",
+          "frozen_cases"
+        ],
+        "forbidden_inputs": [
+          "GLYPHLOCK.expectation",
+          "WEXP.execution_output",
+          "GLYPHLOCK.execution_output"
+        ],
+        "required_clean_room_package": true,
+        "required_role_separation": [
+          [
+            "expectation_author",
+            "implementation_operator"
+          ]
+        ]
+      }
+    },
+    "non_claims": [
+      "Prototype-000 performs no operating-system-level information control."
+    ]
+  },
+  "metadata": {
+    "attestation_method": "chronology_only"
+  },
+  "mode": "autonomous",
+  "non_claims": [
+    "This is a disposable architectural prototype. It establishes nothing about either party's protocol.",
+    "GLYPHLOCK is a synthetic system invented for this exercise."
+  ],
+  "permit_unilateral_review": true,
+  "permitted_terminal_outcomes": [
+    "REPRODUCED",
+    "BOUNDARY_IDENTIFIED",
+    "MAPPING_REQUIRED",
+    "SEMANTIC_DISAGREEMENT",
+    "EXPECTATION_MISMATCH",
+    "IMPLEMENTATION_LIMIT",
+    "COUNTERPARTY_INCOMPLETE",
+    "UNILATERAL_REVIEW",
+    "REVIEW_REQUIRED"
+  ],
+  "required_phases": [
+    "INIT",
+    "PARTIES_DECLARED",
+    "AUTHORITIES_PINNED",
+    "CAPABILITIES_DECLARED",
+    "CASES_FROZEN",
+    "EXPECTATIONS_COMMITTED",
+    "EXPECTATIONS_REVEALED",
+    "EXECUTION_ALLOWED",
+    "EXECUTED",
+    "COMPARED",
+    "REVIEW_READY"
+  ],
+  "role_assignments": {
+    "glyph-analyst": [
+      "expectation_author"
+    ],
+    "glyph-operator": [
+      "party",
+      "implementation_operator"
+    ],
+    "lab-owner": [
+      "experiment_owner",
+      "fixture_author"
+    ],
+    "wexp-analyst": [
+      "expectation_author"
+    ],
+    "wexp-operator": [
+      "party",
+      "implementation_operator"
+    ]
+  },
+  "title": "WEXP and GLYPHLOCK evidence-binding exercise"
+}

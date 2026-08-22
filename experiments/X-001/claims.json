@@ -1,0 +1,60 @@
+[
+  {
+    "claim_id": "X-CL-001",
+    "evidence": [
+      "semantic-bundle.json native_result_identities",
+      "ledger EXECUTION_RECORDED events"
+    ],
+    "metadata": {
+      "publication_phrases": [
+        "preserved each party's native result"
+      ]
+    },
+    "scope": "experiment X-001",
+    "status": "SUPPORTED",
+    "text": "The framework executed both parties over the same frozen case set and preserved each party's native result."
+  },
+  {
+    "claim_id": "X-CL-002",
+    "metadata": {
+      "publication_phrases": [
+        "are interoperable",
+        "interoperability was demonstrated",
+        "interoperability was established"
+      ]
+    },
+    "premises": [
+      "a shared proposition can be stated in both vocabularies"
+    ],
+    "scope": "experiment X-001",
+    "status": "UNDERDETERMINED",
+    "text": "WEXP and GLYPHLOCK are interoperable."
+  },
+  {
+    "claim_id": "X-CL-003",
+    "metadata": {
+      "publication_phrases": [
+        "GLYPHLOCK is used in production",
+        "GLYPHLOCK is a real protocol"
+      ]
+    },
+    "prohibited_in_publication": true,
+    "scope": "experiment X-001",
+    "status": "PROHIBITED",
+    "text": "GLYPHLOCK is a real protocol used by anyone."
+  },
+  {
+    "claim_id": "X-CL-004",
+    "evidence": [
+      "comparison.json case_statuses for X-C-007"
+    ],
+    "metadata": {
+      "publication_phrases": [
+        "terminated in a recorded non-failure state"
+      ]
+    },
+    "scope": "experiment X-001",
+    "status": "SUPPORTED",
+    "text": "A case that one party cannot execute terminated in a recorded non-failure state."
+  }
+]

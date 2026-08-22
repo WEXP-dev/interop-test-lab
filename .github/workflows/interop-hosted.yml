@@ -1,0 +1,237 @@
+name: Hosted autonomous interop leg
+
+# Orchestration only. Every step shells out to the same CLI the assisted and
+# manual paths use, so no semantic decision lives in this file.
+#
+# This repository is public and holds no generic core. Two inputs are public and
+# pinned in pins.json. The third — the tooling — is private, reached through the
+# WEXP Automation GitHub App with Contents: Read-only, and pinned by a protected
+# runtime value that is never disclosed here.
+#
+# There is deliberately no pull_request trigger. A contributor's pull request
+# cannot start this workflow and therefore cannot reach the App credential.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/**'
+      - 'pins.json'
+      - '.github/workflows/interop-hosted.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  hosted:
+    name: run the exercise on a hosted runner
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.12'
+
+      # Version identity, not access. Required, exact, and never a branch head:
+      # a floating ref would make the evidence unattributable to any particular
+      # tooling revision. The value is a registered secret, so it is redacted
+      # from every log line; this step confirms only its shape.
+      - name: Validate the private tooling pin
+        id: pin
+        env:
+          WEXP_WORK_PIN: ${{ secrets.WEXP_WORK_PIN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WEXP_WORK_PIN}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::INFRASTRUCTURE EXECUTION UNAVAILABLE — the private tooling pin is not configured"
+            exit 0
+          fi
+          if ! printf '%s' "${WEXP_WORK_PIN}" | grep -Eq '^[0-9a-f]{40}$'; then
+            echo "::error::The private tooling pin is not a 40-character lowercase hexadecimal commit id. No fallback exists and no branch head is accepted."
+            exit 1
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+          echo "private tooling pin: present and well formed"
+
+      - name: Check for App credentials
+        id: app
+        env:
+          APP_ID: ${{ secrets.WEXP_AUTOMATION_APP_ID }}
+          APP_KEY: ${{ secrets.WEXP_AUTOMATION_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_ID}" ] || [ -z "${APP_KEY}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::INFRASTRUCTURE EXECUTION UNAVAILABLE — WEXP Automation credentials are not configured"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # An execution-availability problem is not a result about either party.
+      # The run records that distinction and stops rather than reporting an
+      # outcome it did not observe.
+      - name: Record the unavailable-infrastructure result
+        if: steps.pin.outputs.available != 'true' || steps.app.outputs.available != 'true'
+        run: |
+          mkdir -p build/evidence
+          cat > build/evidence/HOSTED-RESULT.json <<'JSON'
+          {
+            "record_kind": "interop-hosted-leg-result",
+            "status": "INFRASTRUCTURE EXECUTION UNAVAILABLE",
+            "reason": "the private tooling pin or the WEXP Automation credentials are not configured for this repository",
+            "is_experiment_failure": false,
+            "is_portability_failure": false,
+            "non_claims": [
+              "This is an execution-availability problem, not a result about either party.",
+              "No semantic conclusion may be drawn from this run."
+            ]
+          }
+          JSON
+          cat build/evidence/HOSTED-RESULT.json
+
+      # Access, not version identity. The App is installed only on the private
+      # tooling repository and holds Contents: Read-only. The token it mints is
+      # short-lived, used for one fetch, and never persisted.
+      - name: Mint a short-lived installation token
+        id: token
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        uses: actions/create-github-app-token@af35edadc00be37caa72ed9f3e6d5f7801bfdf09 # v1.11.7
+        with:
+          app-id: ${{ secrets.WEXP_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.WEXP_AUTOMATION_PRIVATE_KEY }}
+          owner: WEXP-dev
+          repositories: wexp-work
+
+      - name: Fetch the pinned private tooling
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: WEXP-dev/wexp-work
+          ref: ${{ secrets.WEXP_WORK_PIN }}
+          path: tooling
+          token: ${{ steps.token.outputs.token }}
+          persist-credentials: false
+
+      - name: Fetch the public counterparty
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: WEXP-dev/interop-test-subject
+          path: subject
+          persist-credentials: false
+
+      - name: Fetch the public WEXP party
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit="$(python3 -c "import json;print(json.load(open('pins.json'))['wexp_party']['commit'])")"
+          git clone --quiet https://github.com/WEXP-dev/wexp-ref.git wexp-ref
+          git -C wexp-ref fetch --quiet origin "${commit}"
+          git -C wexp-ref checkout --quiet --detach "${commit}"
+          observed="$(git -C wexp-ref rev-parse HEAD)"
+          [ "${observed}" = "${commit}" ] || { echo "::error::wexp-ref pin mismatch"; exit 1; }
+          echo "wexp-ref pinned at ${observed}"
+
+      # Public pins are verified by value. The private pin is verified by
+      # comparison only: a match is reported, the identity itself is not.
+      - name: Verify every pin
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        env:
+          WEXP_WORK_PIN: ${{ secrets.WEXP_WORK_PIN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          subject_expected="$(python3 -c "import json;print(json.load(open('pins.json'))['subject']['commit'])")"
+          subject_observed="$(git -C subject rev-parse HEAD)"
+          if [ "${subject_observed}" != "${subject_expected}" ]; then
+            echo "::error::subject pin mismatch: observed ${subject_observed}"; exit 1
+          fi
+          echo "subject pinned at ${subject_observed}"
+          tooling_observed="$(git -C tooling rev-parse HEAD)"
+          if [ "${tooling_observed}" != "${WEXP_WORK_PIN}" ]; then
+            echo "::error::private tooling is not at its configured pin"; exit 1
+          fi
+          echo "private tooling: checkout matches its configured pin"
+
+      - name: Validate the experiment policy
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        env:
+          PYTHONPATH: tooling/interop
+        run: >-
+          python3 -m interop_core validate --entity experiment-policy
+          --document experiments/X-001/policy.json --output build/evidence/policy.json
+
+      - name: Freeze the case set
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        env:
+          PYTHONPATH: tooling/interop
+        run: >-
+          python3 -m interop_core freeze-cases
+          --case-set experiments/X-001/cases.json
+          --output build/evidence/frozen-cases.json
+
+      - name: Run the exercise
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        env:
+          PYTHONPATH: tooling/interop
+          WEXP_REF_CHECKOUT: wexp-ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -R experiments/X-001/. tooling/interop/prototypes/prototype-000/experiments/X-001/
+          python3 tooling/interop/prototypes/prototype-000/experiments/X-001/run.py \
+            --mode autonomous --root build/run
+
+      # Only the semantic projection is published. The full ledger stays in the
+      # run environment: its adapter records carry content digests of private
+      # source files, which are not this repository's to disclose.
+      - name: Stage the semantic evidence
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in semantic-bundle comparison outcome claims-registry status; do
+            cp "build/run/${f}.json" "build/evidence/${f}.json"
+          done
+          ls -1 build/evidence/
+
+      # A published artifact must not carry the private version identity, by
+      # accident or otherwise. This checks rather than assumes.
+      - name: Refuse to publish the private pin
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        env:
+          WEXP_WORK_PIN: ${{ secrets.WEXP_WORK_PIN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -rqF "${WEXP_WORK_PIN}" build/evidence/; then
+            echo "::error::staged evidence contains the private tooling pin; refusing to upload"
+            exit 1
+          fi
+          echo "staged evidence carries no private version identity"
+
+      - name: Confirm the counterparty repository is the one that ran
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 subject/glyphlock/runner.py subject/fixtures/G-001-sealed.glyph
+          python3 subject/glyphlock/runner.py subject/fixtures/G-004-no-analogue.glyph
+
+      - name: Upload the semantic evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hosted-leg-evidence
+          path: build/evidence/
+          if-no-files-found: warn
+          retention-days: 30

@@ -1,0 +1,282 @@
+{
+  "author_party_id": "LAB",
+  "case_set_id": "X-001-CASES",
+  "cases": [
+    {
+      "case_id": "X-C-001",
+      "classification": "SHARE_WITH_COUNTERPARTY",
+      "inputs": [
+        {
+          "fixtures": "neutral fixtures",
+          "format": "wexp-interop-envelope/1",
+          "git_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "material": "exact source bytes for the shared subject\n",
+          "reading": "{\"reading\":\"the subject binds its evidence\"}\n",
+          "repository": "example/shared-subject"
+        },
+        {
+          "attest": "present",
+          "chain": "alpha->beta->gamma",
+          "epoch-band": "1..5",
+          "format": "GLYPHLOCK/1",
+          "sigil": "a1b2c3d4",
+          "ward-depth": "3",
+          "warden": "north-gate"
+        }
+      ],
+      "metadata": {
+        "intent": "both parties can state the proposition and both support it"
+      },
+      "propositions": [
+        "the subject's evidence binding holds"
+      ]
+    },
+    {
+      "case_id": "X-C-002",
+      "classification": "SHARE_WITH_COUNTERPARTY",
+      "inputs": [
+        {
+          "fixtures": "neutral fixtures",
+          "format": "wexp-interop-envelope/1",
+          "git_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "material": "exact source bytes for the shared subject\n",
+          "reading": "{\"reading\":\"the subject binds its evidence\"}\n",
+          "repository": "example/shared-subject",
+          "revealed_reading": "{ \"reading\" : \"the subject binds its evidence\" }\n"
+        },
+        {
+          "attest": "absent",
+          "chain": "alpha->beta->gamma",
+          "epoch-band": "1..5",
+          "format": "GLYPHLOCK/1",
+          "sigil": "a1b2c3d4",
+          "ward-depth": "3",
+          "warden": "north-gate"
+        }
+      ],
+      "metadata": {
+        "intent": "both parties deny; agreement on a negative"
+      },
+      "propositions": [
+        "the subject's evidence binding holds"
+      ]
+    },
+    {
+      "case_id": "X-C-003",
+      "classification": "SHARE_WITH_COUNTERPARTY",
+      "inputs": [
+        {
+          "fixtures": "neutral fixtures",
+          "format": "wexp-interop-envelope/1",
+          "git_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "material": "exact source bytes for the shared subject\n",
+          "reading": "{\"reading\":\"the subject binds its evidence\"}\n",
+          "repository": "example/shared-subject"
+        },
+        {
+          "attest": "absent",
+          "chain": "alpha->beta->gamma",
+          "epoch-band": "1..5",
+          "format": "GLYPHLOCK/1",
+          "sigil": "a1b2c3d4",
+          "ward-depth": "3",
+          "warden": "north-gate"
+        }
+      ],
+      "metadata": {
+        "intent": "genuine disagreement: one supports, one denies"
+      },
+      "propositions": [
+        "the subject's evidence binding holds"
+      ],
+      "relations": [
+        {
+          "note": "same WEXP envelope, GLYPHLOCK attestation withdrawn",
+          "relation": "control_of",
+          "target_case_id": "X-C-001"
+        }
+      ]
+    },
+    {
+      "case_id": "X-C-004",
+      "classification": "SHARE_WITH_COUNTERPARTY",
+      "inputs": [
+        {
+          "fixtures": "neutral fixtures",
+          "format": "wexp-interop-envelope/1",
+          "git_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "material": "exact source bytes for the shared subject\n",
+          "reading": "{\"reading\":\"the subject binds its evidence\"}\n",
+          "repository": "example/shared-subject"
+        },
+        {
+          "attest": "present",
+          "chain": "alpha->beta",
+          "epoch-band": "1..5",
+          "format": "GLYPHLOCK/1",
+          "sigil": "a1b2c3d4",
+          "ward-depth": "9",
+          "warden": "north-gate"
+        }
+      ],
+      "metadata": {
+        "intent": "GLYPHLOCK cannot decide; underdetermination is the result"
+      },
+      "propositions": [
+        "the subject's evidence binding holds"
+      ],
+      "relations": [
+        {
+          "relation": "boundary_case_of",
+          "target_case_id": "X-C-001"
+        }
+      ]
+    },
+    {
+      "case_id": "X-C-005",
+      "classification": "SHARE_WITH_COUNTERPARTY",
+      "inputs": [
+        {
+          "fixtures": "neutral fixtures",
+          "format": "wexp-interop-envelope/1",
+          "git_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "material": "exact source bytes for the shared subject\n",
+          "reading": "{\"reading\":\"the subject binds its evidence\"}\n",
+          "repository": "example/shared-subject"
+        },
+        {
+          "attest": "present",
+          "chain": "alpha",
+          "epoch-band": "4..9",
+          "format": "GLYPHLOCK/1",
+          "sigil": "a1b2c3d4",
+          "ward-depth": "1",
+          "warden": "south-gate"
+        }
+      ],
+      "metadata": {
+        "intent": "GLYPHLOCK returns a state with no analogue in the other party"
+      },
+      "propositions": [
+        "the subject's evidence binding holds"
+      ]
+    },
+    {
+      "case_id": "X-C-006",
+      "classification": "SHARE_WITH_COUNTERPARTY",
+      "inputs": [
+        {
+          "fixtures": "neutral fixtures",
+          "format": "wexp-interop-envelope/1",
+          "git_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "material": "exact source bytes for the shared subject\n",
+          "reading": "{\"reading\":\"the subject binds its evidence\"}\n",
+          "repository": "example/shared-subject"
+        },
+        {
+          "attest": "present",
+          "chain": "alpha->beta->gamma",
+          "epoch-band": "1..5",
+          "format": "GLYPHLOCK/1",
+          "sigil": "ffffffff",
+          "ward-depth": "3",
+          "warden": "north-gate"
+        }
+      ],
+      "metadata": {
+        "intent": "hostile twin with one fully declared mutation"
+      },
+      "mutation": {
+        "declared_changes": [
+          {
+            "description": "substitute the warding sigil",
+            "mutation_class": "replace_identity",
+            "replacement": "ffffffff",
+            "target": "inputs[1].sigil"
+          }
+        ],
+        "derived_from": "X-C-001",
+        "permitted_derivative_paths": []
+      },
+      "propositions": [
+        "the subject's evidence binding holds"
+      ],
+      "relations": [
+        {
+          "relation": "hostile_of",
+          "target_case_id": "X-C-001"
+        }
+      ]
+    },
+    {
+      "case_id": "X-C-007",
+      "classification": "SHARE_WITH_COUNTERPARTY",
+      "inputs": [
+        {
+          "fixtures": "neutral fixtures",
+          "format": "wexp-interop-envelope/1",
+          "git_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "material": "exact source bytes for the shared subject\n",
+          "reading": "{\"reading\":\"the subject binds its evidence\"}\n",
+          "repository": "example/shared-subject"
+        },
+        {
+          "attest": "present",
+          "chain": "alpha->beta->gamma",
+          "epoch-band": "1..5",
+          "format": "GLYPHLOCK/2",
+          "sigil": "a1b2c3d4",
+          "ward-depth": "3",
+          "warden": "north-gate"
+        }
+      ],
+      "metadata": {
+        "intent": "GLYPHLOCK cannot execute this revision; not a failure"
+      },
+      "propositions": [
+        "the subject's evidence binding holds"
+      ]
+    },
+    {
+      "case_id": "X-C-008",
+      "classification": "SHARE_WITH_COUNTERPARTY",
+      "inputs": [
+        {
+          "fixtures": "neutral fixtures",
+          "format": "wexp-interop-envelope/1",
+          "git_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "material": "exact source bytes for the shared subject\n",
+          "reading": "{\"reading\":\"the subject binds its evidence\"}\n",
+          "repository": "example/shared-subject"
+        },
+        {
+          "attest": "present",
+          "chain": "alpha->beta->gamma",
+          "epoch-band": "1..5",
+          "format": "GLYPHLOCK/1",
+          "sigil": "a1b2c3d4",
+          "ward-depth": "3",
+          "warden": "north-gate"
+        }
+      ],
+      "metadata": {
+        "intent": "no agreed mapping exists between the two parties for this case, so neither side's result speaks to the other's"
+      },
+      "propositions": [
+        "the subject's evidence binding holds"
+      ],
+      "relations": [
+        {
+          "note": "same inputs; no agreed mapping between the vocabularies",
+          "relation": "boundary_case_of",
+          "target_case_id": "X-C-001"
+        }
+      ]
+    }
+  ],
+  "classification": "SHARE_WITH_COUNTERPARTY",
+  "non_claims": [
+    "These cases were authored by the experiment owner, not by either party.",
+    "X-C-008 exercises the missing-mapping path."
+  ]
+}

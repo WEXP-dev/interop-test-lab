@@ -1,0 +1,52 @@
+[
+  {
+    "accepted_input_formats": [
+      "wexp-interop-envelope/1"
+    ],
+    "adapter": "adapters.wexp.execution",
+    "attestation_methods": [
+      "none",
+      "chronology_only"
+    ],
+    "implementation_available": true,
+    "known_absences": [
+      "semantic comparison",
+      "lifecycle mapping"
+    ],
+    "native_output_formats": [
+      "WEXP-INTEROP-VERIFICATION-1"
+    ],
+    "offline_execution": true,
+    "partial_surface": [
+      "evidence envelope binding only"
+    ],
+    "party_id": "WEXP",
+    "required_runtime": [
+      "python3.12"
+    ]
+  },
+  {
+    "accepted_input_formats": [
+      "GLYPHLOCK/1"
+    ],
+    "adapter": "adapters.synthetic.glyphlock_adapter",
+    "attestation_methods": [
+      "none"
+    ],
+    "implementation_available": true,
+    "known_absences": [
+      "GLYPHLOCK/2 ward requests"
+    ],
+    "native_output_formats": [
+      "GLYPHLOCK-RESULT/1"
+    ],
+    "offline_execution": true,
+    "partial_surface": [
+      "ward appraisal only"
+    ],
+    "party_id": "GLYPHLOCK",
+    "required_runtime": [
+      "python3.12"
+    ]
+  }
+]

@@ -1,0 +1,43 @@
+[
+  {
+    "authorities": [
+      "wexp-ref-main",
+      "wexp-ref-pr-11"
+    ],
+    "capabilities": "cap-WEXP",
+    "display_name": "WEXP reference side",
+    "executable": true,
+    "implementations": [
+      {
+        "adapter": "adapters.wexp.execution",
+        "implementation_id": "wexp-ref-interop-pr11",
+        "status": "available"
+      }
+    ],
+    "party_id": "WEXP",
+    "roles": [
+      "party",
+      "implementation_operator"
+    ]
+  },
+  {
+    "authorities": [
+      "glyphlock-spec"
+    ],
+    "capabilities": "cap-GLYPHLOCK",
+    "display_name": "GLYPHLOCK synthetic counterparty",
+    "executable": true,
+    "implementations": [
+      {
+        "adapter": "adapters.synthetic.glyphlock_adapter",
+        "implementation_id": "glyphlock-cli-v1",
+        "status": "available"
+      }
+    ],
+    "party_id": "GLYPHLOCK",
+    "roles": [
+      "party",
+      "implementation_operator"
+    ]
+  }
+]

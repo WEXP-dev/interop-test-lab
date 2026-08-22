@@ -1,0 +1,99 @@
+{
+  "GLYPHLOCK": {
+    "X-C-001": {
+      "format": "GLYPHLOCK-RESULT/1",
+      "notes": "ward reached its declared depth",
+      "seal-state": "GLYPH_SEALED",
+      "ward-reached": "3"
+    },
+    "X-C-002": {
+      "format": "GLYPHLOCK-RESULT/1",
+      "notes": "no attestation accompanies the ward",
+      "seal-state": "GLYPH_BROKEN",
+      "ward-reached": "0"
+    },
+    "X-C-003": {
+      "format": "GLYPHLOCK-RESULT/1",
+      "notes": "no attestation accompanies the ward",
+      "seal-state": "GLYPH_BROKEN",
+      "ward-reached": "0"
+    },
+    "X-C-004": {
+      "format": "GLYPHLOCK-RESULT/1",
+      "notes": "ward depth 9 exceeds the 2-link chain",
+      "seal-state": "GLYPH_PARTIAL",
+      "ward-reached": "2"
+    },
+    "X-C-005": {
+      "format": "GLYPHLOCK-RESULT/1",
+      "notes": "chain length 1 lies outside epoch band 4..9",
+      "seal-state": "GLYPH_NO_ANALOGUE",
+      "ward-reached": "1"
+    },
+    "X-C-006": {
+      "format": "GLYPHLOCK-RESULT/1",
+      "notes": "ward reached its declared depth",
+      "seal-state": "GLYPH_SEALED",
+      "ward-reached": "3"
+    },
+    "X-C-007": null,
+    "X-C-008": {
+      "format": "GLYPHLOCK-RESULT/1",
+      "notes": "ward reached its declared depth",
+      "seal-state": "GLYPH_SEALED",
+      "ward-reached": "3"
+    }
+  },
+  "WEXP": {
+    "X-C-001": {
+      "harness": "wexp-ref interop evidence harness",
+      "harness_artifact_version": "WEXP-INTEROP-VERIFICATION-1",
+      "mismatches": [],
+      "status": "VERIFIED"
+    },
+    "X-C-002": {
+      "harness": "wexp-ref interop evidence harness",
+      "harness_artifact_version": "WEXP-INTEROP-VERIFICATION-1",
+      "mismatches": [
+        "reading_sha256"
+      ],
+      "status": "COMMITMENT_MISMATCH"
+    },
+    "X-C-003": {
+      "harness": "wexp-ref interop evidence harness",
+      "harness_artifact_version": "WEXP-INTEROP-VERIFICATION-1",
+      "mismatches": [],
+      "status": "VERIFIED"
+    },
+    "X-C-004": {
+      "harness": "wexp-ref interop evidence harness",
+      "harness_artifact_version": "WEXP-INTEROP-VERIFICATION-1",
+      "mismatches": [],
+      "status": "VERIFIED"
+    },
+    "X-C-005": {
+      "harness": "wexp-ref interop evidence harness",
+      "harness_artifact_version": "WEXP-INTEROP-VERIFICATION-1",
+      "mismatches": [],
+      "status": "VERIFIED"
+    },
+    "X-C-006": {
+      "harness": "wexp-ref interop evidence harness",
+      "harness_artifact_version": "WEXP-INTEROP-VERIFICATION-1",
+      "mismatches": [],
+      "status": "VERIFIED"
+    },
+    "X-C-007": {
+      "harness": "wexp-ref interop evidence harness",
+      "harness_artifact_version": "WEXP-INTEROP-VERIFICATION-1",
+      "mismatches": [],
+      "status": "VERIFIED"
+    },
+    "X-C-008": {
+      "harness": "wexp-ref interop evidence harness",
+      "harness_artifact_version": "WEXP-INTEROP-VERIFICATION-1",
+      "mismatches": [],
+      "status": "VERIFIED"
+    }
+  }
+}
