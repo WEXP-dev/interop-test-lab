@@ -60,8 +60,8 @@ class DisclosureScanTest(unittest.TestCase):
                 self.assertIn("secret", self.families(self.scan()))
 
     def test_a_personal_or_local_path_fails_closed(self) -> None:
-        """§17 B, and the exact shape found in an earlier public record."""
-        for text in ("/Users/someone/.codex/sessions/2026/08/19/",
+        """§17 B: a developer's filesystem is not part of a publication bundle."""
+        for text in ("/Users/example/.codex/sessions/0000/00/00/",
                      "/home/developer/wexp/",
                      r"C:\Users\dev\wexp",
                      "/Volumes/Macintosh HD/work",
@@ -119,10 +119,14 @@ class DisclosureScanTest(unittest.TestCase):
             with self.subTest(object_id=item["id"]):
                 self.assertTrue(item["why"], "every declared object id carries a reason")
 
-    def test_a_private_repository_name_fails_closed(self) -> None:
-        self.stage("outcome.json", '{"tooling":"WEXP-dev/wexp-work"}\n')
-        report = self.scan()
-        self.assertIn("private-identity", self.families(report))
+    def test_a_non_public_organisation_repository_fails_closed(self) -> None:
+        """The rule names the public repositories, never the private inventory."""
+        self.stage("outcome.json", '{"tooling":"WEXP-dev/some-private-repo"}\n')
+        self.assertIn("private-identity", self.families(self.scan()))
+
+    def test_a_public_organisation_repository_is_accepted(self) -> None:
+        self.stage("outcome.json", '{"party":"WEXP-dev/interop-test-subject"}\n')
+        self.assertEqual(self.scan()["status"], "CLEAN")
 
     def test_a_strategic_keyword_is_a_review_trigger_that_fails_until_written_down(self) -> None:
         """§17 H: the word does not prove leakage; it forces an explicit decision."""

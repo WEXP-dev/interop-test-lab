@@ -80,11 +80,17 @@ STRATEGIC_KEYWORDS: list[str] = [
     "term sheet", "cap table",
 ]
 
-PRIVATE_REPOSITORY_NAMES: list[str] = [
-    "wexp-work", "wexp-site", "wexp-archive", "wexp-native-record",
-    "wexp-spec-legacy", "wexp-core-legacy", "wexp-verifier-legacy",
-    "wexp-spec-bootstrap", "wexp-vectors-bootstrap", "wexp-ref-bootstrap",
-]
+#: Repositories that are already public, and may therefore be named in a
+#: bundle. The rule is stated this way round on purpose: enumerating the private
+#: repositories here would publish the inventory this scanner exists to protect,
+#: and would miss any repository created after it was written.
+PUBLIC_REPOSITORIES: frozenset[str] = frozenset({
+    ".github", "interop-test-lab", "interop-test-subject",
+    "wexp-interop", "wexp-ref", "wexp-spec", "wexp-vectors",
+})
+
+#: An owner/name reference to any repository in the WEXP organisation.
+ORG_REPOSITORY_RE = re.compile(r"\bWEXP-dev/([A-Za-z0-9._-]+)")
 
 SECRET_RE = [(name, re.compile(pattern)) for name, pattern in SECRET_PATTERNS]
 PATH_RE = [(name, re.compile(pattern)) for name, pattern in PATH_PATTERNS]
@@ -191,12 +197,15 @@ def scan(
                         "rule": "runtime-protected-value", "path": relative,
                         "line": number,
                     })
-            for name in (PRIVATE_REPOSITORY_NAMES if "private-identity" in wanted else ()):
-                if name in line:
+            for name in (ORG_REPOSITORY_RE.findall(line)
+                         if "private-identity" in wanted else ()):
+                if name.rstrip(".") not in PUBLIC_REPOSITORIES:
                     findings.append({
                         "severity": "FAIL", "family": "private-identity",
-                        "rule": f"private-repository-name:{name}",
+                        "rule": "non-public-organisation-repository",
                         "path": relative, "line": number,
+                        "detail": ("a repository in the organisation that is not on "
+                                   "the declared public list"),
                     })
             for sha in (GIT_SHA_RE.findall(line)
                         if "unattributed-commit-identity" in wanted else ()):

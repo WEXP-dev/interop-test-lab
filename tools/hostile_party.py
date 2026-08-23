@@ -45,8 +45,10 @@ OUT_OF_CONTRACT_ENV = (
     "GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN", "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
 )
 
-#: Directory names a private tooling checkout would plausibly use.
-PRIVATE_CHECKOUT_NAMES = ("tooling", "wexp-work", "private", "interop_core")
+#: Directory names a private tooling checkout would plausibly use. Generic on
+#: purpose: a probe that has to be told the repository's name is testing the
+#: name, not the boundary.
+PRIVATE_CHECKOUT_NAMES = ("tooling", "private", "interop_core", "interop")
 
 STAGING_HINTS = ("build/evidence", "../build/evidence", "../../build/evidence")
 
