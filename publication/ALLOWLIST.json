@@ -117,5 +117,6 @@
       "where": "experiments/X-001/cases.json, and the frozen case set derived from it",
       "why": "A synthetic placeholder in the shared-subject fixture. It names no repository and identifies no object; the case set is already public in this repository."
     }
-  ]
+  ],
+  "strategic_trigger_note": "Product and programme identities are matched by salted digest from publication/STRATEGIC-TRIGGERS.json rather than by name, so this public repository does not publish the list it checks for. An exception entry names the digest prefix reported by the scan."
 }

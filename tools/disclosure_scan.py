@@ -29,6 +29,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -59,7 +60,8 @@ PATH_PATTERNS: list[tuple[str, str]] = [
     ("windows-home", r"[A-Za-z]:\\Users\\[^\\\s]+"),
     ("macos-volume", r"/Volumes/[A-Za-z0-9 ._-]+"),
     ("icloud-mount", r"Library/CloudStorage"),
-    ("google-drive", r"(?:My Drive|GoogleDrive-|Мой диск)"),
+    # The Cyrillic form is escaped so this file carries no Cyrillic of its own.
+    ("google-drive", "(?:My Drive|GoogleDrive-|\u041c\u043e\u0439 \u0434\u0438\u0441\u043a)"),
     ("onedrive", r"OneDrive"),
     ("dropbox", r"Dropbox"),
     ("ssh-dir", r"(?:^|[\s\"'/])\.ssh/"),
@@ -71,14 +73,56 @@ PATH_PATTERNS: list[tuple[str, str]] = [
 
 # A hit here means "a human must look", not "this is a leak". The gate turns
 # that into an explicit decision by failing until the pair is written down.
+#
+# Ordinary commercial vocabulary stays in plain text: these are English words
+# and naming them discloses nothing.
 STRATEGIC_KEYWORDS: list[str] = [
-    "PAIKernel", "PAIkernel", "paikernel",
-    "COYL",
-    "WitSeal", "witseal", "WitEyes", "WitGate",
     "equity", "pricing", "customer", "funding",
     "commercial roadmap", "monetisation", "monetization",
     "term sheet", "cap table",
 ]
+
+#: Product and programme identities are a different matter. Writing them out
+#: here would publish, in a public repository, exactly the list this scanner
+#: exists to keep out of a public bundle — the same mistake as enumerating the
+#: private repositories. They are matched by salted digest instead, loaded from
+#: publication/STRATEGIC-TRIGGERS.json.
+#:
+#: This is not secrecy and is not claimed as any: the set is small and the salt
+#: is public, so anyone who guesses a term can confirm it. It keeps the terms
+#: out of the plaintext surface, which is all it is for.
+STRATEGIC_TRIGGERS_DEFAULT = Path(__file__).resolve().parents[1] / "publication" / "STRATEGIC-TRIGGERS.json"
+
+#: Tokens worth hashing. Short tokens are noise, and a product name is a word.
+TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9]{2,}")
+
+
+def load_strategic_triggers(path: Path) -> tuple[str, frozenset[str]]:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise GateFailure(f"cannot read strategic triggers: {exc}") from exc
+    if document.get("algorithm") != "sha256":
+        raise GateFailure("unsupported strategic-trigger digest algorithm")
+    salt = document.get("salt")
+    digests = document.get("digests")
+    if not isinstance(salt, str) or not isinstance(digests, list) or not digests:
+        raise GateFailure("strategic triggers are malformed")
+    return salt, frozenset(str(d).lower() for d in digests)
+
+
+def triggered_identities(line: str, salt: str, digests: frozenset[str]) -> list[str]:
+    """Digest prefixes of any identity token on this line.
+
+    The prefix, never the token: a scanner that prints what it matched
+    republishes what it matched.
+    """
+    hits = []
+    for token in TOKEN_RE.findall(line):
+        digest = hashlib.sha256((salt + token.lower()).encode("utf-8")).hexdigest()
+        if digest in digests:
+            hits.append(digest[:12])
+    return hits
 
 #: Repositories that are already public, and may therefore be named in a
 #: bundle. The rule is stated this way round on purpose: enumerating the private
@@ -139,6 +183,7 @@ def scan(
     public_pins: list[str],
     families: tuple[str, ...] = ALL_FAMILIES,
     exclude: frozenset[str] = frozenset(),
+    strategic_triggers: tuple[str, frozenset[str]] = ("", frozenset()),
 ) -> dict:
     staging = staging.resolve()
     wanted = frozenset(families)
@@ -150,6 +195,7 @@ def scan(
     # declares at runtime, plus any value the allowlist writes down with a
     # reason. Anything else of that shape is treated as a candidate private
     # commit identity and refused.
+    trigger_salt, trigger_digests = strategic_triggers
     known_shas = {sha.lower() for sha in public_pins}
     known_shas.update(
         str(item["id"]).lower()
@@ -216,12 +262,16 @@ def scan(
                         "line": number,
                         "detail": "a 40-hex object id that is not a declared public pin",
                     })
-            for keyword in (STRATEGIC_KEYWORDS
-                            if "strategic-review-trigger" in wanted else ()):
-                if keyword in line and (relative, keyword) not in exceptions:
+            if "strategic-review-trigger" in wanted:
+                rules = [k for k in STRATEGIC_KEYWORDS if k in line]
+                rules += [f"identity:{d}" for d
+                          in triggered_identities(line, trigger_salt, trigger_digests)]
+                for rule in rules:
+                    if (relative, rule) in exceptions:
+                        continue
                     findings.append({
                         "severity": "FAIL", "family": "strategic-review-trigger",
-                        "rule": keyword, "path": relative, "line": number,
+                        "rule": rule, "path": relative, "line": number,
                         "detail": (
                             "a strategic-vocabulary hit is a review trigger, not a "
                             "proof of leakage; admit it by writing an explicit "
@@ -256,6 +306,9 @@ def main(argv: list[str] | None = None) -> int:
         help="all: every rule, for a publication bundle. unconditional: the rules "
              "that are wrong wherever they appear, for this repository's own tree.")
     parser.add_argument(
+        "--strategic-triggers", type=Path, default=STRATEGIC_TRIGGERS_DEFAULT,
+        help="salted digests of the identities whose appearance is a review trigger")
+    parser.add_argument(
         "--exclusions", type=Path,
         help="a written list of paths this scan does not apply to, with reasons")
     parser.add_argument("--report", type=Path)
@@ -275,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
             public_pins=args.public_pin,
             families=ALL_FAMILIES if args.families == "all" else UNCONDITIONAL_FAMILIES,
             exclude=exclude,
+            strategic_triggers=load_strategic_triggers(args.strategic_triggers),
         )
     except (GateFailure, OSError, json.JSONDecodeError) as exc:
         print(json.dumps({"record_kind": "interop-lab-disclosure-scan",
