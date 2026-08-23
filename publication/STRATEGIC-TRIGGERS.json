@@ -1,0 +1,18 @@
+{
+  "record_kind": "interop-lab-strategic-triggers",
+  "note": "Salted SHA-256 digests of the product and programme identities whose appearance in a publication bundle is a review trigger. The terms are held as digests so that this public repository does not publish the list it exists to check for.",
+  "algorithm": "sha256",
+  "input": "salt + lowercased token",
+  "salt": "8185b5aa3b92529bad145899867e1ca2",
+  "digests": [
+    "620bba61171b8eec8432891cfaa5499ff4a976fd4261d9792ffadcb8fbc14ddb",
+    "6691ba3b6e04408b0366fe0a797b965a6db2a71c65aa5cc91031354963374566",
+    "72b415b69716ee0efcce64212d846d72700bfc7aaff2eaad98538b3ce58e6b7d",
+    "bb8e6e32740e3301099021723de4111645d526bb1794fb09bc3c62682817e946",
+    "f408d7a42849405cad422dde6c081103117931feb0c80c0aa1ffd72c01d12b00"
+  ],
+  "non_claims": [
+    "This is not secrecy. The digest set is small and the salt is public, so anyone who guesses a term can confirm it. Its purpose is to keep the terms out of the plaintext public surface, not to hide them from an adversary.",
+    "A trigger is a review trigger. It is not evidence that anything leaked."
+  ]
+}

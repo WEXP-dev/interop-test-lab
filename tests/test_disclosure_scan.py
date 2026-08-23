@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -20,6 +21,12 @@ class DisclosureScanTest(unittest.TestCase):
         self.staging = Path(self._tmp.name) / "evidence"
         self.staging.mkdir(parents=True)
         self.addCleanup(self._tmp.cleanup)
+        # A synthetic identity, invented here. The real trigger set is held as
+        # digests precisely so that a test does not have to write one out.
+        self.trigger_term = "Zarquonix"
+        salt = "test-salt"
+        self.triggers = (salt, frozenset({
+            hashlib.sha256((salt + self.trigger_term.lower()).encode()).hexdigest()}))
 
     def stage(self, name: str, text: str) -> None:
         path = self.staging / name
@@ -27,12 +34,14 @@ class DisclosureScanTest(unittest.TestCase):
         path.write_text(text, encoding="utf-8")
 
     def scan(self, *, protected: list[str] | None = None,
-             allowlist: dict | None = None, pins: list[str] | None = None) -> dict:
+             allowlist: dict | None = None, pins: list[str] | None = None,
+             triggers: tuple[str, frozenset[str]] | None = None) -> dict:
         return disclosure_scan.scan(
             self.staging,
             allowlist=allowlist or minimal_allowlist([]),
             protected_values=protected or [],
             public_pins=pins if pins is not None else [PUBLIC_PIN],
+            strategic_triggers=triggers if triggers is not None else self.triggers,
         )
 
     def families(self, report: dict) -> set[str]:
@@ -128,17 +137,50 @@ class DisclosureScanTest(unittest.TestCase):
         self.stage("outcome.json", '{"party":"WEXP-dev/interop-test-subject"}\n')
         self.assertEqual(self.scan()["status"], "CLEAN")
 
-    def test_a_strategic_keyword_is_a_review_trigger_that_fails_until_written_down(self) -> None:
+    def test_a_commercial_word_is_a_review_trigger_that_fails_until_written_down(self) -> None:
         """§17 H: the word does not prove leakage; it forces an explicit decision."""
-        self.stage("outcome.json", '{"note":"compared against WitSeal receipts"}\n')
+        self.stage("outcome.json", '{"note":"per-customer pricing was not compared"}\n')
         report = self.scan()
         self.assertEqual(report["status"], "FAIL")
         self.assertIn("strategic-review-trigger", self.families(report))
 
         allowed = minimal_allowlist([], exceptions=[
-            {"path": "outcome.json", "keyword": "WitSeal",
-             "why": "reviewed: names the public reference implementation only"}])
+            {"path": "outcome.json", "keyword": "customer", "why": "reviewed"},
+            {"path": "outcome.json", "keyword": "pricing", "why": "reviewed"}])
         self.assertEqual(self.scan(allowlist=allowed)["status"], "CLEAN")
+
+    def test_an_identity_trigger_matches_by_digest_and_is_never_echoed(self) -> None:
+        """The identity set is held as digests, so nothing names it — here included."""
+        self.stage("outcome.json", '{"note":"produced by ' + self.trigger_term + '"}\n')
+        report = self.scan()
+        self.assertEqual(report["status"], "FAIL")
+        rules = {f["rule"] for f in report["findings"]}
+        self.assertTrue(any(r.startswith("identity:") for r in rules))
+        # The report names a digest prefix, never the term it matched.
+        self.assertNotIn(self.trigger_term, json.dumps(report))
+
+    def test_an_identity_trigger_matches_case_insensitively(self) -> None:
+        self.stage("outcome.json", '{"note":"' + self.trigger_term.upper() + '"}\n')
+        self.assertIn("strategic-review-trigger", self.families(self.scan()))
+
+    def test_an_identity_trigger_can_be_admitted_by_its_digest(self) -> None:
+        self.stage("outcome.json", '{"note":"' + self.trigger_term + '"}\n')
+        digest = next(iter(self.triggers[1]))
+        allowed = minimal_allowlist([], exceptions=[
+            {"path": "outcome.json", "keyword": f"identity:{digest[:12]}",
+             "why": "reviewed: the identity is already public in this context"}])
+        self.assertEqual(self.scan(allowlist=allowed)["status"], "CLEAN")
+
+    def test_the_repository_trigger_file_publishes_no_terms(self) -> None:
+        document = json.loads(
+            (Path(disclosure_scan.__file__).resolve().parents[1]
+             / "publication" / "STRATEGIC-TRIGGERS.json").read_text(encoding="utf-8"))
+        self.assertEqual(document["algorithm"], "sha256")
+        self.assertTrue(document["digests"])
+        for digest in document["digests"]:
+            with self.subTest(digest=digest[:12]):
+                self.assertRegex(digest, r"^[0-9a-f]{64}$")
+        self.assertTrue(any("not secrecy" in n for n in document["non_claims"]))
 
     def test_a_non_utf8_artifact_fails_closed(self) -> None:
         (self.staging / "outcome.json").write_bytes(b"\xff\xfe\x00binary")
