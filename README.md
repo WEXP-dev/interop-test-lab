@@ -18,7 +18,7 @@ that the engine and the counterparty are separable.
 |---|---|---|
 | counterparty | [`WEXP-dev/interop-test-subject`](https://github.com/WEXP-dev/interop-test-subject) | public |
 | WEXP party | [`WEXP-dev/wexp-ref`](https://github.com/WEXP-dev/wexp-ref) | public |
-| tooling | `WEXP-dev/wexp-work` | private |
+| tooling | private | private |
 
 `interop-test-subject` is a **synthetic** counterparty: a protocol invented for
 this testing and used by nobody for anything. `wexp-ref` is the public WEXP
@@ -27,33 +27,75 @@ reference implementation.
 Both public inputs are pinned to exact commits in [`pins.json`](pins.json).
 Nothing floats.
 
+The pinned `wexp-ref` commit is an **open, unmerged pull-request head**, not a
+published `wexp-ref` state. `pins.json` records it as `draft-unmerged` and it
+must not be described as a released or canonical part of the reference
+implementation. It is public, and it is experimental.
+
+## Two execution domains
+
+A counterparty is somebody else's code. It runs in a job of its own that holds
+no credential, no private checkout and no publication staging tree, and it hands
+its native result across the boundary as an artifact. The coordination domain
+consumes that artifact as data; it never fetches and never executes counterparty
+code, before the publication gate or after it.
+
+```
+counterparty domain          coordination domain
+  counterparty's own code      private tooling, WEXP party
+  no secrets                   comparison, publication gate
+  no private checkout          consumes declared artifacts only
+        └────── native result artifact ──────┘
+```
+
+The counterparty's own results are then compared, case by case, against the
+results the run recorded for it. A disagreement stops the run: published
+evidence must describe a run that actually happened, and a mismatch is an
+authority finding rather than a result about either party.
+
+The isolation boundary is job separation — separate runners, separate
+filesystems, artifacts as the only channel. That is the property relied on and
+it is the only one claimed. It is not a sandbox and not a defence against a
+compromise of the hosting platform. See [`SECURITY-INVARIANTS.md`](SECURITY-INVARIANTS.md).
+
 ## Private tooling access
 
-The tooling stays private. This workflow reaches it through the **WEXP
-Automation** GitHub App:
+Private tooling is fetched at an immutable version using a short-lived,
+repository-scoped, read-only credential. The exact private identity is verified
+during execution but is intentionally excluded from public evidence. No
+credential is committed to this repository, and none is available to the
+counterparty domain.
 
-- the App is installed only on `WEXP-dev/wexp-work`;
-- it holds **Contents: Read-only** and nothing else;
-- a **short-lived installation token** is minted at runtime and used for that
-  one fetch;
-- the token is never persisted, never printed, and never written to an artifact;
-- **no App credential or token is committed to this repository.**
-
-Access and version identity are deliberately separate concerns. The App grants
-*access*. A protected runtime configuration value supplies the *exact immutable
-commit* to check out — required, validated, never a branch head and never a
+Access and version identity are deliberately separate concerns. The credential
+grants *access*. A protected runtime configuration value supplies the *exact
+immutable commit* — required, validated, never a branch head and never a
 floating ref.
 
-**The private commit identity is not part of this public genesis and is not
-printed by the workflow.** You can verify from this repository that the tooling
-was exact-pinned; you cannot learn which commit it was.
+You can verify from this repository that the tooling was exact-pinned; you
+cannot learn which commit it was, and the publication gate refuses to ship a
+bundle that would tell you.
+
+## Publication
+
+Nothing leaves a run that was not admitted in advance.
+[`publication/ALLOWLIST.json`](publication/ALLOWLIST.json) names every
+publishable artifact by exact path; a file nobody admitted fails the run. Once
+the tree is frozen and manifested, the deny scan runs, the manifest is
+re-verified, and only then does the upload happen. There is no `if: always()`
+on the upload: a run whose gate refused publishes nothing.
 
 ## Running it
 
 The workflow runs on `workflow_dispatch` or on a push to `main`, both of which
 require write access. There is deliberately **no `pull_request` trigger**: a
 contributor's pull request cannot start a run, and therefore cannot reach the
-App credential.
+credential.
+
+The regression suite in
+[`.github/workflows/checks.yml`](.github/workflows/checks.yml) *does* run on
+pull requests. It holds no secret and touches no private repository, which is
+the point — the checks that guard the boundary should run on exactly the
+changes most likely to weaken it.
 
 Every step shells out to the same CLI the assisted and manual paths use. There
 is no semantic decision inside the YAML — delete the workflow, run the same

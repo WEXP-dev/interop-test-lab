@@ -1,0 +1,23 @@
+{
+  "record_kind": "interop-lab-repository-scan-exclusions",
+  "note": "The unconditional disclosure rules — credential shapes and personal or local filesystem paths — are applied to this repository's own tracked tree. Three files state those rules or assert on them, so they match themselves. Each is listed here with a reason rather than silently skipped, and nothing else may be added without one.",
+  "scope": "tracked tree only; the publication bundle has no exclusions",
+  "excluded": [
+    {
+      "path": "tools/disclosure_scan.py",
+      "why": "This file *is* the rule list. Its patterns match themselves by construction."
+    },
+    {
+      "path": "tests/test_disclosure_scan.py",
+      "why": "Asserts that each rule fires, which requires writing something each rule matches."
+    },
+    {
+      "path": "tools/hostile_party.py",
+      "why": "Names the environment variables a hostile participant probes for. Names, never values."
+    }
+  ],
+  "non_claims": [
+    "An exclusion suppresses a scan, not a review.",
+    "Nothing here is excluded from the publication-bundle scan, which admits no exclusions at all."
+  ]
+}
