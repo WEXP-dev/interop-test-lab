@@ -111,6 +111,29 @@ class HostedTopologyTest(unittest.TestCase):
         upload = job.steps[job.step_index("upload-artifact")]
         self.assertIn("path: build/evidence/", upload.text)
 
+    # -- privilege inside the coordination domain --------------------------
+
+    def test_the_experiment_crosses_by_declared_input_only(self) -> None:
+        """A directory copy would carry a planted module into the private tree."""
+        job = self.jobs["coordinate"]
+        self.assertIn("python3 tools/stage_experiment.py", job.text)
+        self.assertNotIn("cp -R experiments/", job.text)
+        self.assertLess(job.step_index("python3 tools/stage_experiment.py"),
+                        job.step_index("run.py \\"))
+
+    def test_the_private_tooling_is_never_run_with_this_repository_on_sys_path(self) -> None:
+        """Without PYTHONSAFEPATH, a module planted here shadows the private one."""
+        for step in self.jobs["coordinate"].steps:
+            if "PYTHONPATH: tooling/interop" not in step.text:
+                continue
+            with self.subTest(step=step.name):
+                self.assertIn("PYTHONSAFEPATH: '1'", step.text)
+
+    def test_the_step_that_runs_the_experiment_is_protected_too(self) -> None:
+        job = self.jobs["coordinate"]
+        runner = job.steps[job.step_index("run.py \\")]
+        self.assertIn("PYTHONSAFEPATH: '1'", runner.text)
+
     # -- ordinary workflow hygiene -----------------------------------------
 
     def test_no_pull_request_trigger_anywhere(self) -> None:

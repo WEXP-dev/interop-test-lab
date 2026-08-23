@@ -21,6 +21,19 @@ out-of-contract environment, write into staging, mutate a staged artifact, and
 print a protected value. A co-located control reproduces the topology this
 repository used to have, so the refusals mean something.
 
+## 1a. Write access here does not become code execution inside the private checkout
+
+The lab holds the experiment state and the tooling holds the engine, so the
+state has to cross into the tooling checkout. It crosses as an exact list of
+declared JSON inputs, never as a directory copy, and the private tooling is
+invoked with the current directory kept off `sys.path`.
+
+Without both, a file added to `experiments/X-001/` — a `run.py`, an
+`interop_core/` package — would land in or shadow a tree this repository does
+not own, and execute there with the credential in scope.
+
+*Checked by* `tests/test_stage_experiment.py` and `tests/test_workflow_topology.py`.
+
 ## 2. The disclosure gate is the last thing that can change the evidence
 
 In order: all semantic execution completes, declared outputs are collected, the

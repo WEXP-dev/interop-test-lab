@@ -249,10 +249,14 @@ jobs:
           name: counterparty-native
           path: build/incoming/counterparty-native
 
+      # PYTHONSAFEPATH keeps the current directory off sys.path. Without it a
+      # module dropped into this public repository would shadow the private
+      # package of the same name and run in its place.
       - name: Validate the experiment policy
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         env:
           PYTHONPATH: tooling/interop
+          PYTHONSAFEPATH: '1'
         run: >-
           python3 -m interop_core validate --entity experiment-policy
           --document experiments/X-001/policy.json --output build/gates/policy.json
@@ -261,21 +265,32 @@ jobs:
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         env:
           PYTHONPATH: tooling/interop
+          PYTHONSAFEPATH: '1'
         run: >-
           python3 -m interop_core freeze-cases
           --case-set experiments/X-001/cases.json
           --output build/gates/frozen-cases.json
 
       # ----- all semantic execution happens here and nowhere after -----
+      # The declared experiment inputs cross into the tooling checkout by exact
+      # name. A directory copy would carry whatever else happened to be there,
+      # into a tree this repository does not own, with the credential in scope.
+      - name: Stage the declared experiment inputs
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        run: >-
+          python3 tools/stage_experiment.py
+          --experiment experiments/X-001
+          --into tooling/interop/prototypes/prototype-000/experiments/X-001
+
       - name: Run the exercise
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         env:
           PYTHONPATH: tooling/interop
+          PYTHONSAFEPATH: '1'
           WEXP_REF_CHECKOUT: wexp-ref
         shell: bash
         run: |
           set -euo pipefail
-          cp -R experiments/X-001/. tooling/interop/prototypes/prototype-000/experiments/X-001/
           python3 tooling/interop/prototypes/prototype-000/experiments/X-001/run.py \
             --mode autonomous --root build/run
 
