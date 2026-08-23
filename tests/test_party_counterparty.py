@@ -103,6 +103,76 @@ class PartyDomainTest(unittest.TestCase):
         })
 
 
+@unittest.skipUnless(subject_root(), "the pinned counterparty checkout is not present")
+class RelativeWorkspaceTest(unittest.TestCase):
+    """HL-001: the workflow passes a relative --workspace, and once did not work.
+
+    The harness sets the subprocess cwd to the case directory. A relative path
+    handed to that subprocess is resolved a second time, against the new cwd,
+    so the counterparty was asked for a request that was not where it had been
+    told to look. Every case came back NOT_CONSTRUCTIBLE, which the cross-check
+    correctly refused to publish.
+
+    The existing tests all passed an absolute workspace, so none of them could
+    see it. This one invokes the harness the way the hosted job does.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.cwd = Path(self._tmp.name)
+        self.addCleanup(self._tmp.cleanup)
+        self.expectations = json.loads(
+            EXPECTATIONS.read_text(encoding="utf-8"))["GLYPHLOCK"]
+
+    def run_harness(self, workspace: str, output: str) -> dict:
+        """Invoke exactly as the workflow does, from a cwd of its own."""
+        completed = subprocess.run(
+            [sys.executable, str(HARNESS),
+             "--cases", str(CASES),
+             "--runner", str(subject_root() / "glyphlock" / "runner.py"),
+             "--workspace", workspace,
+             "--output", output,
+             "--party-id", "GLYPHLOCK"],
+            cwd=self.cwd, capture_output=True, text=True, timeout=300, check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        return json.loads((self.cwd / output / "RESULTS.json").read_text(encoding="utf-8"))
+
+    def test_a_relative_workspace_still_reaches_the_counterparty(self) -> None:
+        """The regression itself: relative paths, hosted-style."""
+        results = self.run_harness("build/party/work", "build/party/native")
+        statuses = {r["execution_status"] for r in results["results"]}
+        self.assertNotIn("NOT_CONSTRUCTIBLE", statuses,
+                         "a relative workspace made every case unconstructible")
+        self.assertEqual(statuses, {"OK", "NOT_IMPLEMENTED"})
+
+    def test_a_relative_workspace_reproduces_every_frozen_expectation(self) -> None:
+        """Correct paths are not enough; the native results must be right."""
+        results = self.run_harness("build/party/work", "build/party/native")
+        by_case = {r["case_id"]: r for r in results["results"]}
+        self.assertEqual(set(by_case), set(self.expectations))
+        for case_id, expected in sorted(self.expectations.items()):
+            with self.subTest(case=case_id):
+                self.assertEqual(by_case[case_id]["native_result"], expected)
+
+    def test_relative_and_absolute_workspaces_agree(self) -> None:
+        """The two invocation styles are the same exercise."""
+        relative = self.run_harness("build/rel/work", "build/rel/native")
+        absolute = self.run_harness(str(self.cwd / "abs" / "work"),
+                                    str(self.cwd / "abs" / "native"))
+        self.assertEqual(
+            {r["case_id"]: canonical_sha256(r["native_result"]) for r in relative["results"]},
+            {r["case_id"]: canonical_sha256(r["native_result"]) for r in absolute["results"]},
+        )
+
+    def test_the_request_lands_inside_the_declared_workspace(self) -> None:
+        self.run_harness("build/party/work", "build/party/native")
+        landed = sorted(p.relative_to(self.cwd).as_posix()
+                        for p in (self.cwd / "build/party/work").rglob("request.wire"))
+        self.assertEqual(len(landed), len(self.expectations))
+        self.assertTrue(all(p.startswith("build/party/work/X-C-") for p in landed))
+
+
 class PartyDomainWithoutCounterpartyTest(unittest.TestCase):
     def test_a_missing_counterparty_is_an_availability_fact(self) -> None:
         """TEST 6: missing infrastructure yields no semantic conclusion."""
