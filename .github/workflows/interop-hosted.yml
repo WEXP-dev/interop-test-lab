@@ -3,13 +3,18 @@ name: Hosted autonomous interop leg
 # Orchestration only. Every step shells out to the same CLI the assisted and
 # manual paths use, so no semantic decision lives in this file.
 #
-# This repository is public and holds no generic core. Two inputs are public and
-# pinned in pins.json. The third — the tooling — is private, reached through the
-# WEXP Automation GitHub App with Contents: Read-only, and pinned by a protected
-# runtime value that is never disclosed here.
+# The run is split into two domains that never share a filesystem:
+#
+#   counterparty domain  executes the counterparty's own code and emits that
+#                        party's native result as an artifact. It holds no
+#                        credential, no private checkout and no staging tree.
+#
+#   coordination domain  consumes that artifact as data, runs the comparison
+#                        with the private tooling, and publishes. It never
+#                        checks out and never executes counterparty code.
 #
 # There is deliberately no pull_request trigger. A contributor's pull request
-# cannot start this workflow and therefore cannot reach the App credential.
+# cannot start this workflow and therefore cannot reach the credential.
 
 on:
   workflow_dispatch:
@@ -18,16 +23,100 @@ on:
     paths:
       - 'experiments/**'
       - 'pins.json'
+      - 'publication/**'
+      - 'tools/**'
       - '.github/workflows/interop-hosted.yml'
 
 permissions:
   contents: read
 
 jobs:
-  hosted:
-    name: run the exercise on a hosted runner
+  # --------------------------------------------------------------------------
+  # Counterparty execution domain.
+  #
+  # Everything this job runs is controlled by whoever controls the counterparty
+  # repository. It is given nothing worth stealing: losing this job entirely
+  # costs the run and nothing else.
+  # --------------------------------------------------------------------------
+  counterparty:
+    name: counterparty execution domain
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Fetch the pinned counterparty
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: WEXP-dev/interop-test-subject
+          path: subject
+          persist-credentials: false
+
+      - name: Verify the counterparty pin
+        id: subject
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(python3 -c "import json;print(json.load(open('pins.json'))['subject']['commit'])")"
+          observed="$(git -C subject rev-parse HEAD)"
+          if [ "${observed}" != "${expected}" ]; then
+            echo "::error::counterparty pin mismatch: observed ${observed}"; exit 1
+          fi
+          echo "commit=${observed}" >> "$GITHUB_OUTPUT"
+          echo "counterparty pinned at ${observed}"
+
+      # The counterparty's own runner, over the frozen cases, in its own
+      # vocabulary. No expectation is present in this domain to be peeked at.
+      - name: Execute the counterparty
+        env:
+          SUBJECT_COMMIT: ${{ steps.subject.outputs.commit }}
+        run: >-
+          python3 tools/party_counterparty.py
+          --cases experiments/X-001/cases.json
+          --runner subject/glyphlock/runner.py
+          --workspace build/party/work
+          --output build/party/native
+          --party-id GLYPHLOCK
+          --source-repository WEXP-dev/interop-test-subject
+          --source-commit "${SUBJECT_COMMIT}"
+
+      # Exactly the two declared files. The coordination domain refuses anything
+      # else, but there is no reason to carry it across the boundary either.
+      - name: Hand the native result across the boundary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: counterparty-native
+          path: |
+            build/party/native/RESULTS.json
+            build/party/native/PARTY-DOMAIN.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # --------------------------------------------------------------------------
+  # Coordination domain.
+  #
+  # Holds the private tooling and the credential that fetches it. Consumes only
+  # declared artifacts. Never checks out the counterparty repository and never
+  # executes counterparty code — including after the disclosure gate, where an
+  # earlier revision of this workflow ran it.
+  # --------------------------------------------------------------------------
+  coordinate:
+    name: coordination domain
+    needs: counterparty
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
     steps:
       - name: Check out this repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -77,10 +166,11 @@ jobs:
 
       # An execution-availability problem is not a result about either party.
       # The run records that distinction and stops rather than reporting an
-      # outcome it did not observe.
+      # outcome it did not observe. This artifact is allowlisted like any other.
       - name: Record the unavailable-infrastructure result
         if: steps.pin.outputs.available != 'true' || steps.app.outputs.available != 'true'
         run: |
+          set -euo pipefail
           mkdir -p build/evidence
           cat > build/evidence/HOSTED-RESULT.json <<'JSON'
           {
@@ -120,14 +210,10 @@ jobs:
           token: ${{ steps.token.outputs.token }}
           persist-credentials: false
 
-      - name: Fetch the public counterparty
-        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          repository: WEXP-dev/interop-test-subject
-          path: subject
-          persist-credentials: false
-
+      # The WEXP party's implementation is WEXP's own public source. It stays in
+      # this domain because it is not externally controlled. A future exercise
+      # whose WEXP-side implementation is owned by somebody else must move it
+      # into its own execution domain, exactly as the counterparty is.
       - name: Fetch the public WEXP party
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         shell: bash
@@ -143,95 +229,170 @@ jobs:
 
       # Public pins are verified by value. The private pin is verified by
       # comparison only: a match is reported, the identity itself is not.
-      - name: Verify every pin
+      - name: Verify the private tooling pin holds
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         env:
           WEXP_WORK_PIN: ${{ secrets.WEXP_WORK_PIN }}
         shell: bash
         run: |
           set -euo pipefail
-          subject_expected="$(python3 -c "import json;print(json.load(open('pins.json'))['subject']['commit'])")"
-          subject_observed="$(git -C subject rev-parse HEAD)"
-          if [ "${subject_observed}" != "${subject_expected}" ]; then
-            echo "::error::subject pin mismatch: observed ${subject_observed}"; exit 1
-          fi
-          echo "subject pinned at ${subject_observed}"
           tooling_observed="$(git -C tooling rev-parse HEAD)"
           if [ "${tooling_observed}" != "${WEXP_WORK_PIN}" ]; then
             echo "::error::private tooling is not at its configured pin"; exit 1
           fi
           echo "private tooling: checkout matches its configured pin"
 
+      - name: Collect the counterparty's native result
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: counterparty-native
+          path: build/incoming/counterparty-native
+
+      # PYTHONSAFEPATH keeps the current directory off sys.path. Without it a
+      # module dropped into this public repository would shadow the private
+      # package of the same name and run in its place.
       - name: Validate the experiment policy
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         env:
           PYTHONPATH: tooling/interop
+          PYTHONSAFEPATH: '1'
         run: >-
           python3 -m interop_core validate --entity experiment-policy
-          --document experiments/X-001/policy.json --output build/evidence/policy.json
+          --document experiments/X-001/policy.json --output build/gates/policy.json
 
       - name: Freeze the case set
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         env:
           PYTHONPATH: tooling/interop
+          PYTHONSAFEPATH: '1'
         run: >-
           python3 -m interop_core freeze-cases
           --case-set experiments/X-001/cases.json
-          --output build/evidence/frozen-cases.json
+          --output build/gates/frozen-cases.json
+
+      # ----- all semantic execution happens here and nowhere after -----
+      # The declared experiment inputs cross into the tooling checkout by exact
+      # name. A directory copy would carry whatever else happened to be there,
+      # into a tree this repository does not own, with the credential in scope.
+      - name: Stage the declared experiment inputs
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        run: >-
+          python3 tools/stage_experiment.py
+          --experiment experiments/X-001
+          --into tooling/interop/prototypes/prototype-000/experiments/X-001
 
       - name: Run the exercise
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         env:
           PYTHONPATH: tooling/interop
+          PYTHONSAFEPATH: '1'
           WEXP_REF_CHECKOUT: wexp-ref
         shell: bash
         run: |
           set -euo pipefail
-          cp -R experiments/X-001/. tooling/interop/prototypes/prototype-000/experiments/X-001/
           python3 tooling/interop/prototypes/prototype-000/experiments/X-001/run.py \
             --mode autonomous --root build/run
 
-      # Only the semantic projection is published. The full ledger stays in the
-      # run environment: its adapter records carry content digests of private
-      # source files, which are not this repository's to disclose.
-      - name: Stage the semantic evidence
+      # The counterparty's artifact is data, and it is validated as untrusted
+      # data. The cross-check then asks whether the counterparty's own
+      # repository produced what this run recorded for it. A disagreement is an
+      # authority finding, not a result about either party.
+      - name: Cross-check the counterparty's native result
         if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
         shell: bash
         run: |
           set -euo pipefail
+          expected="$(python3 -c "import json;print(json.load(open('pins.json'))['subject']['commit'])")"
+          python3 tools/ingest_native.py \
+            --native build/incoming/counterparty-native \
+            --bundle build/run/semantic-bundle.json \
+            --party-id GLYPHLOCK \
+            --expected-commit "${expected}" \
+            --output build/evidence/native/glyphlock
+
+      # Only the semantic projection is published. The full ledger stays in the
+      # run environment: its adapter records carry content digests of private
+      # source files, which are not this repository's to disclose.
+      - name: Stage the publication candidate
+        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/evidence
           for f in semantic-bundle comparison outcome claims-registry status; do
             cp "build/run/${f}.json" "build/evidence/${f}.json"
           done
-          ls -1 build/evidence/
+          cp build/gates/frozen-cases.json build/evidence/frozen-cases.json
+          cp experiments/X-001/policy.json build/evidence/policy.json
+          cat > build/evidence/REPRODUCTION.md <<'MD'
+          # Reproducing this evidence
 
-      # A published artifact must not carry the private version identity, by
-      # accident or otherwise. This checks rather than assumes.
-      - name: Refuse to publish the private pin
-        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
+          Delete this workflow and run the same commands by hand. The public
+          inputs are pinned in `pins.json`; the private tooling is fetched at an
+          immutable version whose identity is deliberately not part of this
+          record.
+
+          1. Execute the counterparty's own runner over `experiments/X-001/cases.json`
+             in a domain that holds nothing else, exactly as `tools/party_counterparty.py`
+             does.
+          2. Run the exercise with the interop CLI in `--mode autonomous`.
+          3. Cross-check the counterparty's native results against
+             `semantic-bundle.json` with `tools/ingest_native.py`.
+          4. Apply `tools/publication_gate.py` and `tools/disclosure_scan.py`
+             before anything leaves the run.
+
+          The semantic projection is expected to be byte-identical across the
+          autonomous, assisted and manual paths. A difference is a finding about
+          the framework, not about either party.
+          MD
+          ls -1R build/evidence/
+
+      # ----- publication gate: allowlist, manifest, deny scan, immutability ---
+      # Nothing below mutates the staging tree, and nothing below executes
+      # counterparty code. The manifest is written first so the deny scan itself
+      # is inside the window the immutability check covers.
+      # No `if:` guard. Both paths reach here — the ordinary one and the
+      # unavailable-infrastructure one — and a step that failed earlier stops
+      # the job before it, which is the behaviour a publication gate wants.
+      - name: Admit only allowlisted artifacts and freeze the manifest
+        run: >-
+          python3 tools/publication_gate.py
+          --staging build/evidence
+          --allowlist publication/ALLOWLIST.json
+          --experiment-id X-001
+          --report build/gates/publication-gate.json
+
+      - name: Scan the frozen tree for disclosure
         env:
           WEXP_WORK_PIN: ${{ secrets.WEXP_WORK_PIN }}
         shell: bash
         run: |
           set -euo pipefail
-          if grep -rqF "${WEXP_WORK_PIN}" build/evidence/; then
-            echo "::error::staged evidence contains the private tooling pin; refusing to upload"
-            exit 1
-          fi
-          echo "staged evidence carries no private version identity"
+          mkdir -p build/gates
+          umask 077
+          printf '%s\n' "${WEXP_WORK_PIN}" > build/gates/protected-values.txt
+          subject="$(python3 -c "import json;print(json.load(open('pins.json'))['subject']['commit'])")"
+          wexp="$(python3 -c "import json;print(json.load(open('pins.json'))['wexp_party']['commit'])")"
+          python3 tools/disclosure_scan.py \
+            --staging build/evidence \
+            --allowlist publication/ALLOWLIST.json \
+            --protected-value-file build/gates/protected-values.txt \
+            --public-pin "${subject}" \
+            --public-pin "${wexp}" \
+            --report build/gates/disclosure-scan.json
+          rm -f build/gates/protected-values.txt
 
-      - name: Confirm the counterparty repository is the one that ran
-        if: steps.pin.outputs.available == 'true' && steps.app.outputs.available == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 subject/glyphlock/runner.py subject/fixtures/G-001-sealed.glyph
-          python3 subject/glyphlock/runner.py subject/fixtures/G-004-no-analogue.glyph
+      - name: Confirm nothing changed after the gate
+        run: python3 tools/post_gate_check.py --staging build/evidence
 
-      - name: Upload the semantic evidence
-        if: always()
+      # Deterministic upload mechanics and nothing else. There is no
+      # `if: always()` here on purpose: a run whose disclosure gate failed must
+      # not publish the tree the gate refused.
+      - name: Upload the admitted evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: hosted-leg-evidence
           path: build/evidence/
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 30

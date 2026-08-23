@@ -1,5 +1,5 @@
 {
-  "note": "Public inputs are exactly pinned here. Private tooling is exact-pinned privately and reached through the WEXP Automation GitHub App; its version identity is not part of this public record.",
+  "note": "Public inputs are exactly pinned here. Private tooling is exact-pinned privately and fetched at that immutable version with a short-lived, repository-scoped, read-only credential; its version identity is verified during execution and is deliberately not part of this public record.",
   "record_kind": "interop-test-lab-pins",
   "subject": {
     "commit": "8753d05f139d1cf0f0f63fa7a58a1886a27098b1",
@@ -8,13 +8,11 @@
     "visibility": "public"
   },
   "tooling": {
-    "access_model": "github-app",
-    "github_app": "WEXP Automation",
-    "path_in_repo": "interop/",
+    "access_model": "short-lived repository-scoped read-only credential",
     "permission": "contents:read",
     "public_identity_disclosure": "none",
-    "repository": "WEXP-dev/wexp-work",
     "version_identity_source": "protected-runtime-config",
+    "version_identity_verified_at_runtime": true,
     "visibility": "private"
   },
   "wexp_party": {

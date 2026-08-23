@@ -1,0 +1,121 @@
+{
+  "record_kind": "interop-lab-publication-allowlist",
+  "note": "An evidence bundle may contain only the artifact classes admitted here. Anything else fails closed. Deny rules are not a substitute for this list; they are a second, independent check applied to the admitted bytes.",
+  "experiment_id": "X-001",
+  "admitted": [
+    {
+      "path": "semantic-bundle.json",
+      "artifact_class": "semantic comparison",
+      "why": "The semantic projection of the exercise. This is the result."
+    },
+    {
+      "path": "comparison.json",
+      "artifact_class": "semantic comparison",
+      "why": "Per-case stances derived from each party's own declared stance map."
+    },
+    {
+      "path": "outcome.json",
+      "artifact_class": "outcome",
+      "why": "The terminal outcome, drawn from the policy's permitted set."
+    },
+    {
+      "path": "claims-registry.json",
+      "artifact_class": "claims registry",
+      "why": "Which claims the evidence supports, underdetermines, or prohibits."
+    },
+    {
+      "path": "status.json",
+      "artifact_class": "status",
+      "why": "Phase and ledger-shape status. Carries no ledger bodies."
+    },
+    {
+      "path": "HOSTED-RESULT.json",
+      "artifact_class": "status",
+      "why": "The infrastructure-unavailable record. Present only when the run could not execute; it carries no semantic conclusion."
+    },
+    {
+      "path": "frozen-cases.json",
+      "artifact_class": "case fixtures",
+      "why": "The frozen case set the exercise ran over. Authored by the lab, public already."
+    },
+    {
+      "path": "policy.json",
+      "artifact_class": "frozen charter",
+      "why": "The experiment policy, already public in this repository."
+    },
+    {
+      "path": "native/wexp/RESULTS.json",
+      "artifact_class": "native outputs approved for publication",
+      "why": "The WEXP party's own native results, as the WEXP party stated them."
+    },
+    {
+      "path": "native/glyphlock/RESULTS.json",
+      "artifact_class": "native outputs approved for publication",
+      "why": "The counterparty's own native results, as the counterparty stated them."
+    },
+    {
+      "path": "native/glyphlock/PARTY-DOMAIN.json",
+      "artifact_class": "public source pins",
+      "why": "Which public commit of the counterparty produced those results."
+    },
+    {
+      "path": "native/wexp/PARTY-DOMAIN.json",
+      "artifact_class": "public source pins",
+      "why": "Which public commit of the WEXP party produced those results."
+    },
+    {
+      "path": "REPRODUCTION.md",
+      "artifact_class": "reproduction instructions",
+      "why": "How to obtain the same evidence without this workflow."
+    },
+    {
+      "path": "PUBLICATION-MANIFEST.json",
+      "artifact_class": "publication manifest",
+      "why": "The manifest itself. Written by the gate, excluded from its own entries."
+    }
+  ],
+  "denied_classes": [
+    "private tooling source",
+    "private tooling commit or ref identity",
+    "private repository branch names",
+    "GitHub App private operational metadata",
+    "credentials, tokens and keys",
+    "local filesystem paths",
+    "unrelated Actions metadata",
+    "private ledger bodies",
+    "private per-file source digests",
+    "unrevealed blind case bytes",
+    "private partner correspondence",
+    "commercial or product architecture",
+    "internal strategic roadmap"
+  ],
+  "not_yet_admitted": [
+    {
+      "artifact_class": "expectation commitments",
+      "status": "DENIED UNTIL SEPARATELY APPROVED",
+      "why": "Commitment digests are publishable in principle; nothing in X-001 requires them, so they stay out."
+    },
+    {
+      "artifact_class": "revealed blind case after authorized reveal",
+      "status": "DENIED UNTIL SEPARATELY APPROVED",
+      "why": "X-001 has no blind case. A future experiment must admit the specific path after its reveal is authorized, never by a wildcard."
+    },
+    {
+      "artifact_class": "ablation results",
+      "status": "DENIED UNTIL SEPARATELY APPROVED",
+      "why": "No ablation is part of X-001."
+    }
+  ],
+  "strategic_review_exceptions": [],
+  "non_claims": [
+    "Admission to this list is a publication decision, not a security proof.",
+    "A file admitted here is still subject to every deny rule the gate applies."
+  ],
+  "declared_object_ids": [
+    {
+      "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "where": "experiments/X-001/cases.json, and the frozen case set derived from it",
+      "why": "A synthetic placeholder in the shared-subject fixture. It names no repository and identifies no object; the case set is already public in this repository."
+    }
+  ]
+}
