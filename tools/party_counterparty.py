@@ -80,7 +80,11 @@ def run_case(case: dict, runner: Path, workspace: Path) -> dict:
             "diagnostic": "case carries no request in the counterparty's format",
         }
 
-    work = workspace / case_id
+    # Absolute, because cwd is about to become this same directory. A relative
+    # path handed to the subprocess would be resolved a second time against the
+    # new cwd, and the counterparty would be asked for a request that is not
+    # where it was told to look.
+    work = (workspace / case_id).resolve()
     work.mkdir(parents=True, exist_ok=True)
     request_path = work / "request.wire"
     request_path.write_text(request, encoding="utf-8")
