@@ -1,0 +1,87 @@
+name: Start an interoperability check
+description: Ask whether evidence from your system can support a bounded WEXP claim.
+title: "Interop check: "
+labels: ["interop-intake", "route:unrouted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fill in what you know. Blank fields are fine — say "not sure" and we will work it out.
+        You do not need to know anything about how WEXP works internally.
+
+        **Do not paste secrets, credentials, private keys, tokens, or confidential
+        material here.** This is a public issue. If your case needs private
+        material, tick the box near the bottom and we will arrange a private
+        route *before* you send anything.
+
+  - type: input
+    id: name
+    attributes:
+      label: What is your system, specification or project called?
+      placeholder: e.g. "Acme Delivery Receipts" or "draft-example-record-model-00"
+    validations:
+      required: true
+
+  - type: input
+    id: source
+    attributes:
+      label: Public repository or authoritative source
+      description: A link, if there is one. Leave blank if it is not public.
+      placeholder: https://github.com/...
+
+  - type: input
+    id: revision
+    attributes:
+      label: Exact revision or commit
+      description: If you know it. A commit SHA, a draft revision, a release tag.
+      placeholder: e.g. a full commit SHA, or "-02", or "not sure"
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: What evidence, record or result does it produce?
+      description: In your own words. A receipt? A signed attestation? A log entry? Something else?
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you want to find out?
+      description: The question you actually care about, however informally you want to put it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: believed_claim
+    attributes:
+      label: What do you believe this evidence supports?
+      description: Optional. If you have a view, say it. If you do not, leave it blank — that is a common and perfectly good answer.
+
+  - type: textarea
+    id: example
+    attributes:
+      label: Public example or test material
+      description: Optional. A link to a sample record, a test vector, a fixture. Public material only.
+
+  - type: textarea
+    id: uncertain
+    attributes:
+      label: What are you unsure about?
+      description: Anything that feels shaky, undecided, or like it might be the hard part. This field is often the most useful one.
+
+  - type: checkboxes
+    id: private
+    attributes:
+      label: Private material
+      options:
+        - label: This case needs private evidence, confidential material, or special disclosure handling. (Tick this and send nothing private yet — we will arrange a route first.)
+          required: false
+
+  - type: checkboxes
+    id: confirm
+    attributes:
+      label: Before you submit
+      options:
+        - label: I have not included any secret, credential, private key, token or confidential material in this form.
+          required: true

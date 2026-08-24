@@ -1,5 +1,11 @@
 # interop-test-lab
 
+### Want to test your system with WEXP? **[Start here.](START-HERE.md)**
+
+*Everything below is the engine room. You do not need any of it to ask a question.*
+
+---
+
 **Public.** An experimental interoperability test lab for Prototype-000.
 
 This repository holds the integration workflow and the experiment state. It is
@@ -86,16 +92,29 @@ on the upload: a run whose gate refused publishes nothing.
 
 ## Running it
 
-The workflow runs on `workflow_dispatch` or on a push to `main`, both of which
-require write access. There is deliberately **no `pull_request` trigger**: a
-contributor's pull request cannot start a run, and therefore cannot reach the
+The hosted interop leg runs on `workflow_dispatch` or on a push to `main`, both
+of which require write access. It has deliberately **no `pull_request` trigger**:
+a contributor's pull request cannot start it, and therefore cannot reach the
 credential.
 
+Two self-service workflows sit alongside it, and they are triggered differently
+on purpose:
+
+- **Request validation** runs on `pull_request`. It holds no secret, mints no
+  token, and never executes counterparty code — it reads bytes and computes
+  digests. That is exactly why it is safe on a fork's pull request: a submitter
+  can find out whether their request conforms without anyone here being involved.
+- **Auto-dispatch** runs on `workflow_run`, when validation completes. GitHub
+  runs it from the default branch with this repository's own token, so a
+  submitter controls neither the code that executes nor the permissions it holds.
+  The request is treated as untrusted data throughout: re-hashed and
+  re-validated with trusted code before any admission decision. A green pull
+  request never causes execution by itself.
+
 The regression suite in
-[`.github/workflows/checks.yml`](.github/workflows/checks.yml) *does* run on
-pull requests. It holds no secret and touches no private repository, which is
-the point — the checks that guard the boundary should run on exactly the
-changes most likely to weaken it.
+[`.github/workflows/checks.yml`](.github/workflows/checks.yml) also runs on pull
+requests, for the same reason: the checks that guard the boundary should run on
+exactly the changes most likely to weaken it.
 
 Every step shells out to the same CLI the assisted and manual paths use. There
 is no semantic decision inside the YAML — delete the workflow, run the same
