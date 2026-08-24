@@ -9,6 +9,11 @@
       "envelope_id": "SS-PILOT-ENVELOPE-001",
       "request_sha256": "d85dc7c80b3ab583ad4e6530bfc911babeaacd55b04f491e68c9867b9afb679a",
       "ticket_sha256": "963786bc8a61e749b6b8d93d43a2f175133c10fdce10dc9bf3ebb1d44832ace8"
+    },
+    {
+      "envelope_id": "SS-PILOT-ENVELOPE-001",
+      "request_sha256": "050932d927112f89af10f34169e047259580ae6c9bef98d00b2546b03f9a8fb4",
+      "ticket_sha256": "7b43b86e50e9a9c12c7b0098fe46e6804a5cd766c2b9b0e0e6a6417be1413231"
     }
   ],
   "record_kind": "interop-lab-consumed-tickets"
