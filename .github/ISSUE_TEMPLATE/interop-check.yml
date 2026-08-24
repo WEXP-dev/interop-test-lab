@@ -11,8 +11,8 @@ body:
 
         **Do not paste secrets, credentials, private keys, tokens, or confidential
         material here.** This is a public issue. If your case needs private
-        material, tick the box near the bottom and we will arrange a private
-        route *before* you send anything.
+        material, tick the box near the bottom and send nothing private — we will
+        first confirm whether a suitable route is available.
 
   - type: input
     id: name
@@ -25,16 +25,19 @@ body:
   - type: input
     id: source
     attributes:
-      label: Public repository or authoritative source
-      description: A link, if there is one. Leave blank if it is not public.
-      placeholder: https://github.com/...
+      label: Where can we read about it?
+      description: A link to the repository, spec or docs — whatever is public. Leave blank if none of it is.
+      placeholder: https://github.com/... or a link to your specification
 
   - type: input
     id: revision
     attributes:
-      label: Exact revision or commit
-      description: If you know it. A commit SHA, a draft revision, a release tag.
-      placeholder: e.g. a full commit SHA, or "-02", or "not sure"
+      label: Which version?
+      description: >-
+        Whatever you would name it by — a release, a draft revision, a date, a
+        commit. "Not sure" is fine. If the case later goes down the automatic
+        path we will ask for an exact commit then; we do not need it now.
+      placeholder: e.g. v1.2, draft-02, "latest", or "not sure"
 
   - type: textarea
     id: evidence
@@ -55,8 +58,11 @@ body:
   - type: textarea
     id: believed_claim
     attributes:
-      label: What do you believe this evidence supports?
-      description: Optional. If you have a view, say it. If you do not, leave it blank — that is a common and perfectly good answer.
+      label: What do you think that evidence lets you claim?
+      description: >-
+        Optional, and there is no wrong answer. What would you want to be able to
+        say on the strength of it? If you have not decided, leave it blank — that
+        is a common and perfectly good answer.
 
   - type: textarea
     id: example
@@ -75,7 +81,7 @@ body:
     attributes:
       label: Private material
       options:
-        - label: This case needs private evidence, confidential material, or special disclosure handling. (Tick this and send nothing private yet — we will arrange a route first.)
+        - label: This case needs private evidence, confidential material, or special disclosure handling. (Tick this and send nothing private. We will first confirm whether a suitable route is available.)
           required: false
 
   - type: checkboxes

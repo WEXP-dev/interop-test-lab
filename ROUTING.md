@@ -14,7 +14,7 @@ The rubric is `selfservice/routing.py` and it is exercised in CI by
 
 | Route | Said plainly | When |
 | --- | --- | --- |
-| `SELF_SERVICE` | Run it automatically. | The case matches something already worked out, everything is public and pinned to an **admitted** exact commit, and no operating condition is in the way. |
+| `SELF_SERVICE` | Run it automatically. | The case is **already covered by a pre-authorized test class** — public, pinned to an **admitted exact commit**, with no operating condition in the way. Automation is available only for classes that have already been explicitly admitted, so at this early stage most new external systems will not start here. |
 | `ASSISTED_REVIEW` | Review it with us. | The semantics are understood, but something operational is unusual — private evidence, special disclosure handling, no exact revision, an outside dependency. |
 | `JOINT_RESEARCH` | Research it with us. | The mapping from your evidence to a bounded WEXP claim is itself the open question. |
 
@@ -46,9 +46,10 @@ is `ASSISTED_REVIEW`, never research. **An unusual operating condition is not a
 new scientific question**, and quietly promoting one to the other would inflate
 what the research route means.
 
-## You do not pick your route
+## Routing is determined from the case, not from preference
 
-Your own view of your case is useful input. It is not authority.
+Your own view of your case is useful input. It is not authority. The form has no
+route selector, and adding one would not help: the route follows from the facts.
 
 The guarantee is structural, not a promise: `route()` never reads a
 requested-route field at all, so asking for one cannot change the answer. There
