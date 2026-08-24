@@ -17,7 +17,7 @@
     ]
   },
   "envelope_id": "SS-PILOT-ENVELOPE-001",
-  "expiry": "PILOT — synthetic, non-production. Valid only for the synthetic self-service pilot on the pinned synthetic source pack. It authorizes nothing about any real counterparty and expires by being SUSPENDED.",
+  "expiry": "PILOT \u2014 synthetic, non-production. Valid only for the synthetic self-service pilot on the pinned synthetic source pack. It authorizes nothing about any real counterparty and expires by being SUSPENDED.",
   "grants": {
     "max_claim_ceiling": "synthetic bounded pilot execution only; no interoperability, conformance or semantic claim of any kind",
     "runs_per_request": 1
@@ -36,7 +36,7 @@
   ],
   "refuses": [
     "any request whose counterparty declares requires_secret true",
-    "any request declaring mutable_dependencies, network_access_required, or any external_service — the admitted dependency posture is SELF_CONTAINED",
+    "any request declaring mutable_dependencies, network_access_required, or any external_service \u2014 the admitted dependency posture is SELF_CONTAINED",
     "any floating ref: the counterparty commit must be an exact 40-hex commit",
     "any publication path outside the admitted classes, and any wildcard",
     "any requested claim ceiling other than the one this envelope grants",
@@ -49,5 +49,5 @@
     "more than one run per request"
   ],
   "schema_version": "wexp-interop-admission-envelope/0.1",
-  "status": "ACTIVE"
+  "status": "SUSPENDED"
 }
