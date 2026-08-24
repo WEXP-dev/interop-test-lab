@@ -2,6 +2,8 @@
 
 ### Want to test your system with WEXP? **[Start here.](START-HERE.md)**
 
+*Or see [what a result looks like](EXAMPLE-INTEROP-RECORD.md) first.*
+
 *Everything below is the engine room. You do not need any of it to ask a question.*
 
 ---
