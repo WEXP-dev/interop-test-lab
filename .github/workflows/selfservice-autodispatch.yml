@@ -1,0 +1,376 @@
+name: Self-service auto-dispatch
+
+# Closes the one gap Pilot-001 left open: a routine, envelope-conforming request
+# reaching hosted execution with nobody pressing anything for that request.
+#
+# WHY workflow_run AND NOT pull_request. This fires on the COMPLETION of the
+# unprivileged validation workflow, and GitHub runs it from the default branch
+# with this repository's own token. A submitter therefore controls neither the
+# code that runs here nor the permissions it holds. What they control is the
+# request JSON, and that is treated as untrusted data throughout: the artifact
+# is downloaded, the request bytes are re-hashed, validation is RE-RUN here, and
+# the ticket is issued against the ACTIVE envelope. Nothing from the artifact is
+# trusted because it arrived; it is trusted only after it is re-derived.
+#
+# A green pull request never causes execution by itself. The chain is:
+#   untrusted submission -> unprivileged validation -> trusted admission
+#   decision and ticket -> automatic trusted dispatch.
+#
+# There is no pull_request, pull_request_target or issue_comment trigger here.
+
+on:
+  workflow_run:
+    workflows: ["Self-service request validation"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selfservice-autodispatch-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+env:
+  LEDGER_BRANCH: selfservice-ledger
+  LEDGER_PATH: selfservice/LEDGER.json
+  ENVELOPE: selfservice/envelopes/ENVELOPE-PILOT-001.json
+
+jobs:
+
+  auto_admit:
+    name: automatic admission domain
+    # A failed validation never reaches admission. This is the only place the
+    # upstream conclusion is consulted, and it can only stop the run, never
+    # start one that would otherwise be refused.
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # ledger append only, by compare-and-swap
+      actions: read     # read the upstream artifact
+    outputs:
+      admitted: ${{ steps.decide.outputs.admitted }}
+      counterparty_repo: ${{ steps.decide.outputs.repository }}
+      counterparty_commit: ${{ steps.decide.outputs.commit }}
+      ticket_id: ${{ steps.decide.outputs.ticket_id }}
+    steps:
+      # The DEFAULT BRANCH, explicitly. Never the submitter's ref.
+      - name: Check out trusted code from the default branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the validator dependency
+        run: python3 -m pip install --quiet jsonschema
+
+      - name: Collect the upstream artifact as untrusted data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/incoming
+          gh run download "${{ github.event.workflow_run.id }}" -R "${{ github.repository }}" \
+            -n validation-receipt -D build/incoming
+          test -s build/incoming/REQUEST.json
+          test -s build/incoming/RECEIPT.json
+
+      - name: Resolve the pin the request declares
+        id: pin
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, re
+          r = json.load(open("build/incoming/REQUEST.json"))
+          repo = r["counterparty"]["repository"]
+          commit = r["counterparty"]["commit"]
+          assert re.fullmatch(r"[0-9a-f]{40}", commit), "counterparty commit is not an exact 40-hex commit"
+          assert re.fullmatch(r"[A-Za-z0-9._-]+/[A-Za-z0-9._-]+", repo), "counterparty repository is malformed"
+          print(f"repository={repo}")
+          print(f"commit={commit}")
+          PY
+
+      # Fetched, never executed here. The re-validation reads bytes and digests.
+      - name: Fetch the pinned counterparty source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ steps.pin.outputs.repository }}
+          ref: ${{ steps.pin.outputs.commit }}
+          path: counterparty
+          persist-credentials: false
+
+      # Re-derived, not trusted. If the upstream receipt and this disagree, this
+      # one is the one that counts, because this one ran here.
+      - name: Re-validate the request with trusted code
+        env:
+          PYTHONPATH: selfservice/impl
+          PYTHONSAFEPATH: '1'
+        run: >-
+          python3 -m selfservice.validate_request
+          --request build/incoming/REQUEST.json
+          --source-root counterparty/selfservice/pilot-source
+          --entrypoint-root counterparty/selfservice/pilot-source
+          --receipt build/RECEIPT.json
+
+      - name: Issue the one-run admission ticket
+        id: decide
+        env:
+          PYTHONPATH: selfservice/impl
+          PYTHONSAFEPATH: '1'
+        run: |
+          set -euo pipefail
+          tid="SS-AUTO-$(python3 -c "import hashlib;print(hashlib.sha256(open('build/incoming/REQUEST.json','rb').read()).hexdigest()[:16])")"
+          python3 -m selfservice.admission issue \
+            --request build/incoming/REQUEST.json \
+            --receipt build/RECEIPT.json \
+            --envelope "$ENVELOPE" \
+            --ticket-id "$tid" \
+            --provenance "issued automatically by the trusted admission job on workflow_run; never by the submitter" \
+            --out build/TICKET.json
+          {
+            echo "ticket_id=$tid"
+            echo "repository=${{ steps.pin.outputs.repository }}"
+            echo "commit=${{ steps.pin.outputs.commit }}"
+            echo "admitted=true"
+          } >> "$GITHUB_OUTPUT"
+          cat build/TICKET.json
+
+      - name: Fetch the durable ledger
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 selfservice/impl/ledger_client.py --mode fetch
+          --repo "${{ github.repository }}" --branch "$LEDGER_BRANCH" --path "$LEDGER_PATH"
+          --local build/LEDGER.json --expected-sha-file build/ledger.sha
+
+      - name: Spend the ticket exactly once
+        env:
+          PYTHONPATH: selfservice/impl
+          PYTHONSAFEPATH: '1'
+        run: >-
+          python3 -m selfservice.admission consume
+          --ticket build/TICKET.json
+          --request build/incoming/REQUEST.json
+          --envelope "$ENVELOPE"
+          --ledger build/LEDGER.json
+
+      - name: Commit the consumption durably
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 selfservice/impl/ledger_client.py --mode commit
+          --repo "${{ github.repository }}" --branch "$LEDGER_BRANCH" --path "$LEDGER_PATH"
+          --local build/LEDGER.json --expected-sha-file build/ledger.sha
+          --message "selfservice: auto-consume ticket ${{ steps.decide.outputs.ticket_id }}"
+
+      - name: Hand the admission record across the boundary
+        run: |
+          set -euo pipefail
+          mkdir -p build/admission
+          cp build/TICKET.json build/admission/TICKET.json
+          cp build/RECEIPT.json build/admission/RECEIPT.json
+          cp build/incoming/REQUEST.json build/admission/REQUEST.json
+
+      - name: Upload the admission record
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: auto-admission-record
+          path: build/admission/
+          if-no-files-found: error
+          retention-days: 30
+
+  counterparty:
+    name: counterparty execution domain
+    needs: auto_admit
+    if: needs.auto_admit.outputs.admitted == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Fetch the admitted counterparty at its exact pin
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ needs.auto_admit.outputs.counterparty_repo }}
+          ref: ${{ needs.auto_admit.outputs.counterparty_commit }}
+          path: cp
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify the pin the ticket admitted
+        shell: bash
+        run: |
+          set -euo pipefail
+          observed="$(git -C cp rev-parse HEAD)"
+          [ "$observed" = "${{ needs.auto_admit.outputs.counterparty_commit }}" ] \
+            || { echo "::error::counterparty pin mismatch"; exit 1; }
+          echo "counterparty pinned at $observed"
+
+      - name: Execute the counterparty's own entrypoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/native
+          cd cp/selfservice/pilot-source
+          python3 runner/run.py --out "$GITHUB_WORKSPACE/build/native/RESULTS.json"
+
+      - name: Hand the native result across the boundary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: auto-counterparty-native
+          path: build/native/
+          if-no-files-found: error
+          retention-days: 30
+
+  coordinate:
+    name: coordination domain
+    needs: [auto_admit, counterparty]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out trusted code from the default branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the schema checker
+        run: python3 -m pip install --quiet jsonschema
+
+      - name: Collect the admission record
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: auto-admission-record
+          path: build/incoming/admission
+
+      - name: Collect the counterparty's native result
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: auto-counterparty-native
+          path: build/incoming/native
+
+      - name: Check the native result against the schema the request pinned
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, jsonschema, pathlib
+          schema = json.loads(pathlib.Path("selfservice/pilot-source/schema/out.json").read_text())
+          native = json.loads(pathlib.Path("build/incoming/native/RESULTS.json").read_text())
+          jsonschema.validate(native, schema)
+          print("native output conforms to the pinned schema")
+          PY
+
+      - name: Stage the publication candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/evidence/native build/evidence/admission
+          cp build/incoming/native/RESULTS.json build/evidence/native/RESULTS.json
+          cp build/incoming/admission/TICKET.json build/evidence/admission/TICKET.json
+          cp build/incoming/admission/RECEIPT.json build/evidence/admission/RECEIPT.json
+          cp build/incoming/admission/REQUEST.json build/evidence/admission/REQUEST.json
+          python3 - <<'PY'
+          import json, os, pathlib
+          native = json.loads(pathlib.Path("build/evidence/native/RESULTS.json").read_text())
+          ticket = json.loads(pathlib.Path("build/evidence/admission/TICKET.json").read_text())
+          outcome = {
+            "record_kind": "selfservice-pilot-terminal-record",
+            "pilot_id": "SS-PILOT-002",
+            "dispatch_mode": "AUTOMATIC",
+            "triggered_by": "workflow_run on the completion of unprivileged validation",
+            "human_action_between_submission_and_this_record": "none",
+            "axes": {
+              "INFRASTRUCTURE": "EXECUTED",
+              "VALIDATION": "PASS",
+              "ADMISSION": "ADMITTED_ONE_RUN",
+              "AUTO_DISPATCH": "AUTOMATIC",
+              "EXECUTION": "EXECUTED",
+              "PUBLICATION": "GATE_PENDING_IN_THIS_RECORD",
+              "SEMANTIC_RESULT": "NOT_EVALUATED",
+            },
+            "why_semantic_result_is_not_evaluated": (
+              "This pilot exercises the admission and dispatch control plane on synthetic "
+              "input. No interoperability question was asked and none is answered."
+            ),
+            "upstream_validation_run": os.environ.get("UPSTREAM_RUN", ""),
+            "ticket_id": ticket["ticket_id"],
+            "runs_authorized": ticket["runs_authorized"],
+            "semantic_endorsement": ticket.get("semantic_endorsement", False),
+            "publication_authorized_by_ticket": ticket.get("publication_authorized", False),
+            "native_cases_observed": sorted(native["results"]),
+            "non_claims": [
+              "Synthetic pilot. Not production, not a WEXP or EMILIA result, and not an interoperability claim.",
+              "Automatic dispatch is not permissionless execution. The envelope is a human authority decision taken in advance.",
+              "Workflow success is infrastructure, not semantics.",
+            ],
+          }
+          pathlib.Path("build/evidence/outcome.json").write_text(
+              json.dumps(outcome, indent=2, sort_keys=True) + "\n")
+          PY
+          cat > build/evidence/REPRODUCTION.md <<'MD'
+          # Reproducing this pilot evidence
+
+          Nobody pressed anything for this request. The chain was:
+
+          1. an unprivileged validation workflow ran on the submission and
+             published the exact request bytes with its receipt;
+          2. `workflow_run` started this workflow from the default branch, with
+             this repository's token and none of the submitter's code;
+          3. the request was re-hashed and re-validated here before any
+             admission decision;
+          4. a one-run ticket was issued against the ACTIVE envelope and spent
+             once against the durable ledger;
+          5. the counterparty entrypoint ran in a domain holding nothing else;
+          6. the publication gate ran before anything left the run.
+
+          The envelope is the human decision. It was taken once, in advance.
+          MD
+        env:
+          UPSTREAM_RUN: ${{ github.event.workflow_run.id }}
+
+      - name: Admit only allowlisted artifacts and freeze the manifest
+        run: >-
+          python3 tools/publication_gate.py
+          --staging build/evidence
+          --allowlist selfservice/publication/PILOT-ALLOWLIST.json
+          --experiment-id SS-PILOT-002
+          --report build/gates/publication-gate.json
+
+      - name: Scan the frozen tree for disclosure
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/gates
+          python3 tools/disclosure_scan.py \
+            --staging build/evidence \
+            --allowlist selfservice/publication/PILOT-ALLOWLIST.json \
+            --public-pin "${{ needs.auto_admit.outputs.counterparty_commit }}" \
+            --report build/gates/disclosure-scan.json
+
+      - name: Confirm nothing changed after the gate
+        run: python3 tools/post_gate_check.py --staging build/evidence
+
+      - name: Upload the admitted evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: selfservice-autodispatch-evidence
+          path: build/evidence/
+          if-no-files-found: error
+          retention-days: 30
