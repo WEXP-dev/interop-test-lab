@@ -63,6 +63,10 @@ def route(case: dict) -> dict:
     operational = {
         "public_source": case.get("public_source", False),
         "exact_revision": case.get("exact_revision", False),
+        # Supplying an exact revision is not the same as that revision being
+        # admitted. The baseline admits exact commits, not repositories, so a
+        # known repository at an unadmitted commit is reviewed rather than run.
+        "source_identity_admitted": case.get("source_identity_admitted", False),
         "self_contained": case.get("self_contained", False),
         "public_example_material": case.get("public_example_material", False),
     }
@@ -70,8 +74,8 @@ def route(case: dict) -> dict:
     if not unmet:
         return {
             "route": SELF_SERVICE,
-            "reason": "known evidence class, public source at an exact revision, "
-                      "self-contained, with public example material",
+            "reason": "known evidence class, public source at an exact revision that is "
+                      "explicitly admitted, self-contained, with public example material",
             "external_wording": EXTERNAL_WORDING[SELF_SERVICE],
         }
 

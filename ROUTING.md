@@ -14,7 +14,7 @@ The rubric is `selfservice/routing.py` and it is exercised in CI by
 
 | Route | Said plainly | When |
 | --- | --- | --- |
-| `SELF_SERVICE` | Run it automatically. | The case matches something already worked out, everything is public and pinned, and no operating condition is in the way. |
+| `SELF_SERVICE` | Run it automatically. | The case matches something already worked out, everything is public and pinned to an **admitted** exact commit, and no operating condition is in the way. |
 | `ASSISTED_REVIEW` | Review it with us. | The semantics are understood, but something operational is unusual — private evidence, special disclosure handling, no exact revision, an outside dependency. |
 | `JOINT_RESEARCH` | Research it with us. | The mapping from your evidence to a bounded WEXP claim is itself the open question. |
 
@@ -31,9 +31,15 @@ evidence maps to a bounded WEXP claim, that is `JOINT_RESEARCH`. Running it
 automatically would produce a confident-looking answer to a question that has
 not been posed properly, which is worse than no answer.
 
-**3. Is everything actually in place?** Public source, exact revision,
-self-contained, public example material. All four, or it is not the automatic
-path.
+**3. Is everything actually in place?** Public source; an exact revision; that
+revision **explicitly admitted** as a source identity; self-contained; public
+example material. All five, or it is not the automatic path.
+
+Supplying an exact commit is not the same as that commit being admitted. The
+automatic path admits **exact commits, not repositories** — so a known
+repository at a commit nobody admitted is reviewed, not run. That is a
+deliberate narrowing: admitting a repository would mean admitting whatever
+anyone pushes to it.
 
 **4. Otherwise, review.** Known semantics with something operational in the way
 is `ASSISTED_REVIEW`, never research. **An unusual operating condition is not a

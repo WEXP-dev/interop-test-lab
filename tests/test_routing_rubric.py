@@ -24,12 +24,32 @@ class RouteCases(unittest.TestCase):
             "existing_mapping_known": True,
             "public_source": True,
             "exact_revision": True,
+            "source_identity_admitted": True,
             "self_contained": True,
             "public_example_material": True,
         }
         result = routing.route(case)
         self.assertEqual(result["route"], routing.SELF_SERVICE)
         self.assertEqual(result["external_wording"], "Run it automatically.")
+
+    def test_admitted_repository_at_an_unadmitted_commit_is_not_self_service(self):
+        """The baseline admits exact commits, not repositories.
+
+        Everything else about this case is perfect. The commit is simply not one
+        anybody admitted, and that alone keeps it off the automatic path.
+        """
+        case = {
+            "existing_mapping_known": True,
+            "public_source": True,
+            "exact_revision": True,
+            "source_identity_admitted": False,
+            "self_contained": True,
+            "public_example_material": True,
+        }
+        result = routing.route(case)
+        self.assertNotEqual(result["route"], routing.SELF_SERVICE)
+        self.assertEqual(result["route"], routing.ASSISTED_REVIEW)
+        self.assertIn("source_identity_admitted", result["reason"])
 
     def test_specification_author_asking_whether_their_records_support_a_claim(self):
         """A public standards author whose record model has no established mapping.
@@ -78,6 +98,7 @@ class RouteCases(unittest.TestCase):
             "existing_mapping_known": True,
             "public_source": True,
             "exact_revision": False,
+            "source_identity_admitted": True,
             "self_contained": True,
             "public_example_material": True,
         }
@@ -89,7 +110,8 @@ class RouteCases(unittest.TestCase):
         cases = [
             {"existing_mapping_known": True, "requires_private_material": True},
             {"existing_mapping_known": True, "public_source": True, "exact_revision": True,
-             "self_contained": False, "public_example_material": True},
+             "source_identity_admitted": True, "self_contained": False,
+             "public_example_material": True},
         ]
         for case in cases:
             self.assertEqual(routing.route(case)["route"], routing.ASSISTED_REVIEW)
@@ -107,6 +129,7 @@ class RouteCases(unittest.TestCase):
             "semantic_mapping_is_the_question": True,
             "submitter_requested_route": routing.SELF_SERVICE,
             "public_source": True, "exact_revision": True,
+            "source_identity_admitted": True,
             "self_contained": True, "public_example_material": True,
         }
         self.assertEqual(routing.route(case)["route"], routing.JOINT_RESEARCH)
