@@ -87,7 +87,7 @@ jobs:
           PYTHONPATH: selfservice/impl
           PYTHONSAFEPATH: '1'
         run: >-
-          python3 -m selfservice.admission ticket
+          python3 -m selfservice.admission issue
           --request "${{ inputs.request }}"
           --receipt build/incoming/RECEIPT.json
           --envelope "${{ inputs.envelope }}"
@@ -291,7 +291,7 @@ jobs:
 
           1. Validate the request with `selfservice/impl/selfservice/validate_request.py`
              against the counterparty source at the commit the request pins.
-          2. Issue a ticket with `selfservice.admission ticket` from the request,
+          2. Issue a ticket with `selfservice.admission issue` from the request,
              the receipt and the ACTIVE envelope.
           3. Spend it once with `selfservice.admission consume` against the durable
              ledger, then commit the ledger.
