@@ -49,5 +49,5 @@
     "more than one run per request"
   ],
   "schema_version": "wexp-interop-admission-envelope/0.1",
-  "status": "SUSPENDED"
+  "status": "ACTIVE"
 }
