@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wexp.dev/schemas/interop-admission-envelope-v0.1.json",
+  "title": "WEXP Interop Admission Envelope v0.1",
+  "description": "A signed WEXP-side authorization, written in advance, describing which classes of request may be admitted without a fresh human decision. This is the artifact that makes self-service possible: the authority act happens once, at envelope-definition time, and is then amortized across every conforming request. A request can never produce an envelope, and no envelope is created by a request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "envelope_id", "issued_by", "status", "admits", "grants", "refuses", "expiry"],
+  "properties": {
+    "schema_version": {"const": "wexp-interop-admission-envelope/0.1"},
+    "envelope_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "issued_by": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authority", "signature_required"],
+      "properties": {
+        "authority": {"const": "FOUNDER_OR_DESIGNATED_WEXP_AUTHORITY"},
+        "signature_required": {"const": true}
+      }
+    },
+    "status": {"enum": ["DRAFT", "ACTIVE", "SUSPENDED", "EXPIRED"]},
+    "admits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["counterparty_repositories", "case_set_digests", "comparison_policy_digests", "publication_classes"],
+      "properties": {
+        "counterparty_repositories": {"type": "array", "items": {"type": "string"}},
+        "case_set_digests": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+        "comparison_policy_digests": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
+        "publication_classes": {"type": "array", "items": {"type": "string"}}
+      },
+      "description": "Enumerated, never wildcarded. A request outside every entry is not admissible under this envelope."
+    },
+    "grants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_claim_ceiling", "runs_per_request"],
+      "properties": {
+        "max_claim_ceiling": {"type": "string", "minLength": 1},
+        "runs_per_request": {"const": 1}
+      },
+      "description": "The ceiling WEXP is willing to assert for this class, and one run per admitted request identity."
+    },
+    "refuses": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": [
+        "new semantic mapping",
+        "new authority interpretation",
+        "blind-case handling",
+        "new protected-data class",
+        "any change to interop_core/"
+      ]
+    },
+    "expiry": {"type": "string", "minLength": 1},
+    "non_claims": {
+      "type": "array",
+      "items": {"type": "string"},
+      "default": [
+        "An envelope authorizes a mechanical admission, not a semantic endorsement.",
+        "An envelope grants no publication authority.",
+        "An envelope cannot be created, widened or inferred by a request."
+      ]
+    }
+  }
+}

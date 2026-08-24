@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wexp.dev/schemas/interop-request-v0.2.json",
+  "title": "WEXP Interop Request v0.2",
+  "description": "A counterparty's request for one bounded interoperability exercise. The request carries no digest of itself: a self-referential hash cannot be computed over bytes that contain it. The validator hashes the exact submitted bytes and records that digest in the validation receipt, which is what admission and dispatch then bind.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "counterparty", "experiment", "publication"],
+  "$defs": {
+    "safe_relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$))(?!.*[*?\\[\\]])[A-Za-z0-9._/-]+$",
+      "description": "Relative, traversal-free, glob-free. Absolute paths, '..' segments and the wildcard characters * ? [ ] are refused."
+    },
+    "pinned_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/safe_relative_path"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "description": "An artifact bound by exact digest. A name or a branch is not an identity."
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "wexp-interop-request/0.2"},
+    "request_id": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$",
+      "description": "A submitter-chosen label for correlation only. It is not the request identity and confers nothing; the identity is the validator-computed digest in the validation receipt."
+    },
+    "counterparty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "entrypoint", "native_output_schema", "requires_secret", "dependencies"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "entrypoint": {"$ref": "#/$defs/safe_relative_path"},
+        "native_output_schema": {"$ref": "#/$defs/pinned_artifact"},
+        "requires_secret": {"const": false},
+        "dependencies": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["network_access_required", "external_services", "mutable_dependencies"],
+          "properties": {
+            "network_access_required": {"const": false},
+            "external_services": {"type": "array", "maxItems": 0},
+            "mutable_dependencies": {"const": false}
+          },
+          "description": "The counterparty declares a closed execution posture. A request needing network access, an external service, or a mutable dependency is not routine and leaves the fast path."
+        }
+      }
+    },
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cases", "expectations", "comparison_policy", "requested_claim_ceiling", "research_mode"],
+      "properties": {
+        "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/pinned_artifact"}},
+        "expectations": {"$ref": "#/$defs/pinned_artifact"},
+        "comparison_policy": {"$ref": "#/$defs/pinned_artifact"},
+        "requested_claim_ceiling": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "What the submitter ASKS for. A claim ceiling is a statement about what WEXP is willing to assert, so it is granted by an admission envelope and never declared by the request. This field is a request and is treated as one."
+        },
+        "research_mode": {
+          "type": "boolean",
+          "description": "Submitter's self-declaration, advisory only. A false value is never evidence that a request is routine; the WEXP-side classification recorded in the validation receipt is authoritative."
+        }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requested_paths", "wildcards_permitted"],
+      "properties": {
+        "requested_paths": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/safe_relative_path"}},
+        "wildcards_permitted": {"const": false}
+      }
+    },
+    "submitter": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string", "maxLength": 200},
+        "contact": {"type": "string", "maxLength": 200}
+      },
+      "description": "Correlation only. No field here carries WEXP-side authority."
+    }
+  }
+}

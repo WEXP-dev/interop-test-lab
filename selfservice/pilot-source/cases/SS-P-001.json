@@ -1,0 +1,5 @@
+{
+  "case_id": "SS-P-001",
+  "note": "synthetic pilot case; carries no WEXP or EMILIA semantics and no scientific content",
+  "synthetic": true
+}

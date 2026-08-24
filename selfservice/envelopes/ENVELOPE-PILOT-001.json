@@ -1,0 +1,53 @@
+{
+  "admits": {
+    "case_set_digests": [
+      "62bcf7c84d2a9ee275c36345e6b5bef6d8b5823e0ca800d71752f3f5dd674881"
+    ],
+    "comparison_policy_digests": [
+      "affb4ebcaffe3f1979584d1da72a99ea374e110fab8a05ad0c945dc0e6eafc76"
+    ],
+    "counterparty_repositories": [
+      "WEXP-dev/interop-test-lab"
+    ],
+    "publication_classes": [
+      "native",
+      "admission",
+      "outcome.json",
+      "REPRODUCTION.md"
+    ]
+  },
+  "envelope_id": "SS-PILOT-ENVELOPE-001",
+  "expiry": "PILOT — synthetic, non-production. Valid only for the synthetic self-service pilot on the pinned synthetic source pack. It authorizes nothing about any real counterparty and expires by being SUSPENDED.",
+  "grants": {
+    "max_claim_ceiling": "synthetic bounded pilot execution only; no interoperability, conformance or semantic claim of any kind",
+    "runs_per_request": 1
+  },
+  "issued_by": {
+    "authority": "FOUNDER_OR_DESIGNATED_WEXP_AUTHORITY",
+    "signature_required": true
+  },
+  "non_claims": [
+    "PILOT. SYNTHETIC. NON-PRODUCTION. This envelope carries no production authority and admits no real counterparty.",
+    "An envelope authorizes a mechanical admission, not a semantic endorsement.",
+    "This is the amortized human authority decision: taken once, in advance, by a person. It removes per-request human coordination, not human authority.",
+    "Counterparty posture admitted: public repository, exact 40-hex commit, credential-free, SELF_CONTAINED, no network access, no mutable dependency, no external service.",
+    "Interface contract admitted: a safe relative entrypoint executed in the counterparty domain, emitting one native output conforming to the pinned schema. The coordination domain reads that output as data and never executes it.",
+    "Generic-core boundary: this envelope admits nothing that would change interop_core/. A request needing that leaves the fast path by construction."
+  ],
+  "refuses": [
+    "any request whose counterparty declares requires_secret true",
+    "any request declaring mutable_dependencies, network_access_required, or any external_service — the admitted dependency posture is SELF_CONTAINED",
+    "any floating ref: the counterparty commit must be an exact 40-hex commit",
+    "any publication path outside the admitted classes, and any wildcard",
+    "any requested claim ceiling other than the one this envelope grants",
+    "new semantic mapping",
+    "new authority interpretation",
+    "blind-case handling",
+    "new protected-data class",
+    "any change to interop_core/",
+    "any EMILIA or INTEROP-002 artifact",
+    "more than one run per request"
+  ],
+  "schema_version": "wexp-interop-admission-envelope/0.1",
+  "status": "ACTIVE"
+}

@@ -1,0 +1,334 @@
+name: Self-service admit and run
+
+# The privileged half. It consumes an admission ticket it issues itself from
+# (request, receipt, envelope) — never the raw pull request, and never a ticket
+# a submitter wrote. There is no pull_request, pull_request_target or
+# issue_comment trigger anywhere in this file: a contributor cannot start it.
+#
+# Three domains, and they do not share a filesystem:
+#
+#   admit         holds the only elevated permission in the run (contents:write,
+#                 for the ledger, and actions:read, to fetch the receipt). It
+#                 executes no counterparty code.
+#   counterparty  executes the counterparty's own entrypoint. No secret, no
+#                 elevated permission, no staging tree.
+#   coordinate    consumes the counterparty's output as data, gates it, and
+#                 publishes. It never checks out or runs counterparty code.
+
+on:
+  workflow_dispatch:
+    inputs:
+      request:
+        description: Path to the validated request
+        required: true
+        default: selfservice/requests/REQUEST-PILOT-001.json
+      envelope:
+        description: Path to the ACTIVE admission envelope
+        required: true
+        default: selfservice/envelopes/ENVELOPE-PILOT-001.json
+      validation_run_id:
+        description: Run id of the unprivileged validation that produced the receipt
+        required: true
+      ticket_id:
+        description: Identifier for the one-run ticket
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selfservice-admit-${{ inputs.request }}
+  cancel-in-progress: false
+
+env:
+  LEDGER_BRANCH: selfservice-ledger
+  LEDGER_PATH: selfservice/LEDGER.json
+
+jobs:
+
+  admit:
+    name: admission domain
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # ledger append only, via compare-and-swap
+      actions: read     # fetch the unprivileged receipt
+    outputs:
+      counterparty_repo: ${{ steps.pin.outputs.repository }}
+      counterparty_commit: ${{ steps.pin.outputs.commit }}
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the validator dependency
+        run: python3 -m pip install --quiet jsonschema
+
+      - name: Collect the unprivileged validation receipt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/incoming
+          gh run download "${{ inputs.validation_run_id }}" -R "${{ github.repository }}" \
+            -n validation-receipt -D build/incoming
+          test -s build/incoming/RECEIPT.json
+
+      # issue_ticket re-derives the request digest from the request bytes and
+      # re-checks the envelope, so a forged receipt cannot widen anything.
+      - name: Issue the one-run admission ticket
+        env:
+          PYTHONPATH: selfservice/impl
+          PYTHONSAFEPATH: '1'
+        run: >-
+          python3 -m selfservice.admission ticket
+          --request "${{ inputs.request }}"
+          --receipt build/incoming/RECEIPT.json
+          --envelope "${{ inputs.envelope }}"
+          --ticket-id "${{ inputs.ticket_id }}"
+          --provenance "issued by the privileged admission job, not by the submitter"
+          --out build/TICKET.json
+
+      - name: Show the ticket
+        run: cat build/TICKET.json
+
+      - name: Fetch the durable ledger
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 selfservice/impl/ledger_client.py --mode fetch
+          --repo "${{ github.repository }}" --branch "$LEDGER_BRANCH" --path "$LEDGER_PATH"
+          --local build/LEDGER.json --expected-sha-file build/ledger.sha
+
+      - name: Spend the ticket exactly once
+        env:
+          PYTHONPATH: selfservice/impl
+          PYTHONSAFEPATH: '1'
+        run: >-
+          python3 -m selfservice.admission consume
+          --ticket build/TICKET.json
+          --request "${{ inputs.request }}"
+          --envelope "${{ inputs.envelope }}"
+          --ledger build/LEDGER.json
+
+      # Compare-and-swap. A second run holding a stale blob sha gets a conflict
+      # and fails closed rather than overwriting the first run's entry.
+      - name: Commit the consumption durably
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 selfservice/impl/ledger_client.py --mode commit
+          --repo "${{ github.repository }}" --branch "$LEDGER_BRANCH" --path "$LEDGER_PATH"
+          --local build/LEDGER.json --expected-sha-file build/ledger.sha
+          --message "selfservice: consume ticket ${{ inputs.ticket_id }}"
+
+      - name: Resolve the admitted counterparty pin
+        id: pin
+        run: |
+          set -euo pipefail
+          echo "repository=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['counterparty']['repository'])" "${{ inputs.request }}")" >> "$GITHUB_OUTPUT"
+          echo "commit=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['counterparty']['commit'])" "${{ inputs.request }}")" >> "$GITHUB_OUTPUT"
+
+      - name: Hand the admission record across the boundary
+        run: |
+          set -euo pipefail
+          mkdir -p build/admission
+          cp build/TICKET.json build/admission/TICKET.json
+          cp build/incoming/RECEIPT.json build/admission/RECEIPT.json
+          cp "${{ inputs.request }}" build/admission/REQUEST.json
+
+      - name: Upload the admission record
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: admission-record
+          path: build/admission/
+          if-no-files-found: error
+          retention-days: 30
+
+  counterparty:
+    name: counterparty execution domain
+    needs: admit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Fetch the admitted counterparty at its exact pin
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ needs.admit.outputs.counterparty_repo }}
+          ref: ${{ needs.admit.outputs.counterparty_commit }}
+          path: cp
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Verify the pin the ticket admitted
+        shell: bash
+        run: |
+          set -euo pipefail
+          observed="$(git -C cp rev-parse HEAD)"
+          [ "$observed" = "${{ needs.admit.outputs.counterparty_commit }}" ] \
+            || { echo "::error::counterparty pin mismatch"; exit 1; }
+          echo "counterparty pinned at $observed"
+
+      - name: Execute the counterparty's own entrypoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/native
+          cd cp/selfservice/pilot-source
+          python3 runner/run.py --out "$GITHUB_WORKSPACE/build/native/RESULTS.json"
+
+      - name: Hand the native result across the boundary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: counterparty-native
+          path: build/native/
+          if-no-files-found: error
+          retention-days: 30
+
+  coordinate:
+    name: coordination domain
+    needs: [admit, counterparty]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the schema checker
+        run: python3 -m pip install --quiet jsonschema
+
+      - name: Collect the admission record
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: admission-record
+          path: build/incoming/admission
+
+      - name: Collect the counterparty's native result
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: counterparty-native
+          path: build/incoming/native
+
+      # Data, validated as untrusted data. Nothing here executes it.
+      - name: Check the native result against the schema the request pinned
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, jsonschema, pathlib
+          schema = json.loads(pathlib.Path("selfservice/pilot-source/schema/out.json").read_text())
+          native = json.loads(pathlib.Path("build/incoming/native/RESULTS.json").read_text())
+          jsonschema.validate(native, schema)
+          print("native output conforms to the pinned schema")
+          PY
+
+      - name: Stage the publication candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/evidence/native build/evidence/admission
+          cp build/incoming/native/RESULTS.json build/evidence/native/RESULTS.json
+          cp build/incoming/admission/TICKET.json build/evidence/admission/TICKET.json
+          cp build/incoming/admission/RECEIPT.json build/evidence/admission/RECEIPT.json
+          cp build/incoming/admission/REQUEST.json build/evidence/admission/REQUEST.json
+          python3 - <<'PY'
+          import json, pathlib
+          native = json.loads(pathlib.Path("build/evidence/native/RESULTS.json").read_text())
+          ticket = json.loads(pathlib.Path("build/evidence/admission/TICKET.json").read_text())
+          outcome = {
+            "record_kind": "selfservice-pilot-terminal-record",
+            "pilot_id": "SS-PILOT-001",
+            "axes": {
+              "INFRASTRUCTURE": "EXECUTED",
+              "ADMISSION": "ADMITTED_ONE_RUN",
+              "EXECUTION": "EXECUTED",
+              "PUBLICATION": "GATE_PENDING_IN_THIS_RECORD",
+              "SEMANTIC_RESULT": "NOT_EVALUATED",
+            },
+            "why_semantic_result_is_not_evaluated": (
+              "This pilot exercises the admission control plane on synthetic input. "
+              "No interoperability question was asked and none is answered. A workflow "
+              "that succeeded is not a semantic result."
+            ),
+            "ticket_id": ticket["ticket_id"],
+            "runs_authorized": ticket["runs_authorized"],
+            "semantic_endorsement": ticket.get("semantic_endorsement", False),
+            "publication_authorized_by_ticket": ticket.get("publication_authorized", False),
+            "native_cases_observed": sorted(native["results"]),
+            "non_claims": [
+              "Synthetic pilot. Not production, not a WEXP or EMILIA result, and not an interoperability claim.",
+              "Workflow success is infrastructure, not semantics.",
+            ],
+          }
+          pathlib.Path("build/evidence/outcome.json").write_text(
+              json.dumps(outcome, indent=2, sort_keys=True) + "\n")
+          PY
+          cat > build/evidence/REPRODUCTION.md <<'MD'
+          # Reproducing this pilot evidence
+
+          Delete this workflow and run the same commands by hand.
+
+          1. Validate the request with `selfservice/impl/selfservice/validate_request.py`
+             against the counterparty source at the commit the request pins.
+          2. Issue a ticket with `selfservice.admission ticket` from the request,
+             the receipt and the ACTIVE envelope.
+          3. Spend it once with `selfservice.admission consume` against the durable
+             ledger, then commit the ledger.
+          4. Run the counterparty entrypoint in a domain holding nothing else.
+          5. Apply `tools/publication_gate.py` and `tools/disclosure_scan.py`
+             before anything leaves the run.
+
+          The admission decision is mechanical. The envelope behind it is not:
+          that is a human authority decision, taken once, in advance.
+          MD
+
+      - name: Admit only allowlisted artifacts and freeze the manifest
+        run: >-
+          python3 tools/publication_gate.py
+          --staging build/evidence
+          --allowlist selfservice/publication/PILOT-ALLOWLIST.json
+          --experiment-id SS-PILOT-001
+          --report build/gates/publication-gate.json
+
+      - name: Scan the frozen tree for disclosure
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/gates
+          python3 tools/disclosure_scan.py \
+            --staging build/evidence \
+            --allowlist selfservice/publication/PILOT-ALLOWLIST.json \
+            --public-pin "${{ needs.admit.outputs.counterparty_commit }}" \
+            --report build/gates/disclosure-scan.json
+
+      - name: Confirm nothing changed after the gate
+        run: python3 tools/post_gate_check.py --staging build/evidence
+
+      - name: Upload the admitted evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: selfservice-pilot-evidence
+          path: build/evidence/
+          if-no-files-found: error
+          retention-days: 30

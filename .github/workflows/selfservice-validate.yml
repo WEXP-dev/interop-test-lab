@@ -1,0 +1,92 @@
+name: Self-service request validation
+
+# The unprivileged half of the self-service contour. It holds no secret, mints
+# no token, and never executes counterparty code — it reads bytes and computes
+# digests. That is why it is safe to run on a pull request from a fork, which is
+# the whole point: a counterparty must be able to find out whether their request
+# conforms without anyone at WEXP being involved.
+
+on:
+  workflow_dispatch:
+    inputs:
+      request:
+        description: Path to the request to validate
+        required: true
+        default: selfservice/requests/REQUEST-PILOT-001.json
+  pull_request:
+    paths:
+      - 'selfservice/requests/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selfservice-validate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: unprivileged request validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install the one dependency the validator refuses to approximate
+        run: python3 -m pip install --quiet jsonschema
+
+      - name: Resolve the request under validation
+        id: req
+        shell: bash
+        env:
+          INPUT_REQUEST: ${{ inputs.request }}
+        run: |
+          set -euo pipefail
+          path="${INPUT_REQUEST:-selfservice/requests/REQUEST-PILOT-001.json}"
+          [ -f "$path" ] || { echo "::error::no such request: $path"; exit 1; }
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "request_sha256=$(python3 -c "import hashlib,sys;print(hashlib.sha256(open(sys.argv[1],'rb').read()).hexdigest())" "$path")" >> "$GITHUB_OUTPUT"
+          echo "commit=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['counterparty']['commit'])" "$path")" >> "$GITHUB_OUTPUT"
+          echo "repository=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['counterparty']['repository'])" "$path")" >> "$GITHUB_OUTPUT"
+
+      # Fetched, never executed. The validator reads these bytes to verify the
+      # digests the request pinned; nothing in this job runs counterparty code.
+      - name: Fetch the pinned counterparty source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          repository: ${{ steps.req.outputs.repository }}
+          ref: ${{ steps.req.outputs.commit }}
+          path: counterparty
+          persist-credentials: false
+
+      - name: Validate and emit the receipt
+        env:
+          PYTHONPATH: selfservice/impl
+          PYTHONSAFEPATH: '1'
+        run: >-
+          python3 -m selfservice.validate_request
+          --request "${{ steps.req.outputs.path }}"
+          --source-root counterparty/selfservice/pilot-source
+          --entrypoint-root counterparty/selfservice/pilot-source
+          --receipt build/RECEIPT.json
+
+      - name: Show the receipt
+        run: cat build/RECEIPT.json
+
+      - name: Upload the validation receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: validation-receipt
+          path: build/RECEIPT.json
+          if-no-files-found: error
+          retention-days: 30

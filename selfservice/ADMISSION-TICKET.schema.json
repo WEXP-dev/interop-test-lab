@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wexp.dev/schemas/interop-admission-ticket-v0.1.json",
+  "title": "WEXP Interop Admission Ticket v0.1",
+  "description": "The only thing privileged dispatch consumes. It binds one exact request identity to one envelope and authorizes exactly one hosted run. A pull request cannot produce a ticket; a ticket cannot be produced from a request alone.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "ticket_id", "request_sha256", "validation_receipt_sha256", "envelope_id", "runs_authorized", "semantic_endorsement", "publication_authorized"],
+  "properties": {
+    "schema_version": {"const": "wexp-interop-admission-ticket/0.1"},
+    "ticket_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "The identity from the validation receipt. Any change to the request bytes yields a different digest and therefore a different request, which this ticket does not authorize."
+    },
+    "validation_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "envelope_id": {"type": "string"},
+    "runs_authorized": {"const": 1},
+    "semantic_endorsement": {
+      "const": false,
+      "description": "Admission is a mechanical decision that a request may run. It is not a statement about what the result will mean."
+    },
+    "publication_authorized": {
+      "const": false,
+      "description": "Publication remains a separate gate after execution."
+    },
+    "issued_at": {"type": "string"},
+    "non_claims": {"type": "array", "items": {"type": "string"}}
+  }
+}

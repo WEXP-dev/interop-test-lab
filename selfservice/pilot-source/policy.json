@@ -1,0 +1,10 @@
+{
+  "note": "synthetic pilot comparison policy",
+  "stance_maps": {
+    "SYNTHETIC": {
+      "supports_values": [
+        "OK"
+      ]
+    }
+  }
+}
