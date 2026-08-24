@@ -1,0 +1,21 @@
+{
+  "$comment": "synthetic pilot native-output schema",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "party": {
+      "const": "SYNTHETIC-PILOT-PARTY"
+    },
+    "record_kind": {
+      "const": "synthetic-pilot-native-result"
+    },
+    "results": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "record_kind",
+    "party",
+    "results"
+  ],
+  "type": "object"
+}

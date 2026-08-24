@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wexp.dev/schemas/interop-validation-receipt-v0.1.json",
+  "title": "WEXP Interop Validation Receipt v0.1",
+  "description": "Produced by the unprivileged validator. This is where the request acquires an identity: the validator hashes the exact submitted bytes and records the digest here. The request itself carries no digest of itself, because a hash cannot cover the bytes that contain it. Admission and dispatch bind this receipt, not the raw request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_sha256", "request_bytes", "request_id", "validator", "checks", "outcome", "wexp_side_classification"],
+  "properties": {
+    "schema_version": {"const": "wexp-interop-validation-receipt/0.1"},
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 over the exact submitted request bytes, computed by the validator. This is the request identity for every later state."
+    },
+    "request_bytes": {"type": "integer", "minimum": 1},
+    "request_id": {"type": "string", "description": "Copied from the request for correlation only."},
+    "validator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_id", "privileged", "secrets_available"],
+      "properties": {
+        "schema_id": {"const": "https://wexp.dev/schemas/interop-request-v0.2.json"},
+        "privileged": {"const": false},
+        "secrets_available": {"const": false}
+      },
+      "description": "Validation runs unprivileged with no secrets. A receipt asserting otherwise is not a valid receipt."
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_conformance", "counterparty_commit_resolves", "entrypoint_present", "artifacts_digest_verified", "publication_paths_exact", "no_secret_required", "closed_dependency_posture"],
+      "properties": {
+        "schema_conformance": {"type": "boolean"},
+        "counterparty_commit_resolves": {"type": "boolean"},
+        "entrypoint_present": {"type": "boolean"},
+        "artifacts_digest_verified": {"type": "boolean"},
+        "publication_paths_exact": {"type": "boolean"},
+        "no_secret_required": {"type": "boolean"},
+        "closed_dependency_posture": {"type": "boolean"}
+      }
+    },
+    "outcome": {
+      "enum": ["VALIDATED", "VALIDATION_FAILED", "REQUIRES_DESIGN_REVIEW", "REQUIRES_DISCLOSURE_REVIEW", "BLOCKED_BY_GENERIC_CAPABILITY_GAP"]
+    },
+    "wexp_side_classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routine", "basis"],
+      "properties": {
+        "routine": {"type": "boolean"},
+        "basis": {"type": "string", "minLength": 1}
+      },
+      "description": "The authoritative routine/research determination. The submitter's research_mode flag is advisory and never substitutes for this."
+    },
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "non_claims": {"type": "array", "items": {"type": "string"}}
+  }
+}

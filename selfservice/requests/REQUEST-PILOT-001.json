@@ -1,0 +1,48 @@
+{
+  "counterparty": {
+    "commit": "6fe3ecbb1c493f60ae31d7d4a2d597e0d2d03160",
+    "dependencies": {
+      "external_services": [],
+      "mutable_dependencies": false,
+      "network_access_required": false
+    },
+    "entrypoint": "runner/run.py",
+    "native_output_schema": {
+      "path": "schema/out.json",
+      "sha256": "740ae8dbd358a770ea4cc547156625de50a7232e8e1da2f27eaa50675a28ea29"
+    },
+    "repository": "WEXP-dev/interop-test-lab",
+    "requires_secret": false
+  },
+  "experiment": {
+    "cases": [
+      {
+        "path": "cases/SS-P-001.json",
+        "sha256": "62bcf7c84d2a9ee275c36345e6b5bef6d8b5823e0ca800d71752f3f5dd674881"
+      }
+    ],
+    "comparison_policy": {
+      "path": "policy.json",
+      "sha256": "affb4ebcaffe3f1979584d1da72a99ea374e110fab8a05ad0c945dc0e6eafc76"
+    },
+    "expectations": {
+      "path": "expect.json",
+      "sha256": "173bbb5034c1528b25dfcb16f2ec358abcccc0be664bc1891bd6cb6b297aa1b8"
+    },
+    "requested_claim_ceiling": "synthetic bounded pilot execution only; no interoperability, conformance or semantic claim of any kind",
+    "research_mode": false
+  },
+  "publication": {
+    "requested_paths": [
+      "outcome.json",
+      "native/RESULTS.json",
+      "admission/TICKET.json",
+      "admission/RECEIPT.json",
+      "admission/REQUEST.json",
+      "REPRODUCTION.md"
+    ],
+    "wildcards_permitted": false
+  },
+  "request_id": "ss-pilot-001",
+  "schema_version": "wexp-interop-request/0.2"
+}

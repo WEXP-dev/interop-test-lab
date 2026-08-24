@@ -1,0 +1,59 @@
+{
+  "admitted": [
+    {
+      "artifact_class": "synthetic native output",
+      "path": "native/RESULTS.json",
+      "why": "The synthetic pilot party's own native result. Public, non-sensitive, no WEXP or EMILIA semantics."
+    },
+    {
+      "artifact_class": "pilot terminal record",
+      "path": "outcome.json",
+      "why": "The pilot's own axis-separated terminal record. Not a semantic result about any protocol."
+    },
+    {
+      "artifact_class": "admission provenance",
+      "path": "admission/TICKET.json",
+      "why": "The one-run ticket that authorized this dispatch, so a reader can check what was granted."
+    },
+    {
+      "artifact_class": "admission provenance",
+      "path": "admission/RECEIPT.json",
+      "why": "The unprivileged validation receipt the ticket was issued against."
+    },
+    {
+      "artifact_class": "admission provenance",
+      "path": "admission/REQUEST.json",
+      "why": "The exact request bytes that were validated and admitted."
+    },
+    {
+      "artifact_class": "reproduction instructions",
+      "path": "REPRODUCTION.md",
+      "why": "How to re-run this without the workflow."
+    },
+    {
+      "artifact_class": "manifest",
+      "path": "PUBLICATION-MANIFEST.json",
+      "why": "The frozen per-file manifest the immutability check verifies against."
+    }
+  ],
+  "denied_classes": [
+    "credentials, tokens and keys",
+    "private repository identities",
+    "private tooling source or identity",
+    "local filesystem paths",
+    "undeclared source material",
+    "any EMILIA or INTEROP-002 artifact",
+    "any unrevealed blind case",
+    "GitHub App operational metadata",
+    "unrelated Actions metadata"
+  ],
+  "experiment_id": "SS-PILOT-001",
+  "non_claims": [
+    "Admission to this list is a publication decision, not a security proof.",
+    "A file admitted here is still subject to every deny rule the scan applies.",
+    "This allowlist covers the synthetic self-service pilot only. It grants nothing to any real counterparty."
+  ],
+  "note": "Exact paths only. Deny by default: any staged file not named here fails the gate closed. Wildcards are refused by the gate itself, not merely absent here.",
+  "record_kind": "interop-lab-publication-allowlist",
+  "wildcards_permitted": false
+}
