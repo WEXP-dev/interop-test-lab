@@ -83,10 +83,18 @@ jobs:
       - name: Show the receipt
         run: cat build/RECEIPT.json
 
+      # The request bytes travel with the receipt so the trusted side can
+      # re-derive everything instead of trusting either of them. Both are
+      # untrusted data downstream; carrying them together only saves a lookup.
+      - name: Carry the exact request bytes alongside the receipt
+        run: cp "${{ steps.req.outputs.path }}" build/REQUEST.json
+
       - name: Upload the validation receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: validation-receipt
-          path: build/RECEIPT.json
+          path: |
+            build/RECEIPT.json
+            build/REQUEST.json
           if-no-files-found: error
           retention-days: 30
