@@ -56,8 +56,12 @@ We first determine which route applies. Routing is determined from the case
 itself, not from requester preference.
 
 **Run it automatically** — for a case already covered by a pre-authorized test
-class. The automatic path exists and has been demonstrated end to end, but it is
-available *only* for classes that have already been explicitly admitted.
+class. The path has been run end to end once, against this project's own
+synthetic pilot input: one case, one authorized run, no external system and no
+semantic result. What that did and did not establish is written down in
+[`selfservice/DEMONSTRATION-STATUS.md`](selfservice/DEMONSTRATION-STATUS.md).
+It is available *only* for classes that have already been explicitly
+admitted, so no external system has been through it yet.
 
 **Review it with us** — for known semantics with operating conditions outside
 the automated class: private evidence, special disclosure handling, an
