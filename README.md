@@ -129,6 +129,17 @@ its inputs it records that fact and stops, rather than reporting an outcome abou
 either party. Disagreement, underdetermination and a missing mapping are all
 legitimate results; only a broken procedure is a failure.
 
+## Licence
+
+Apache-2.0 — see [`LICENSE`](LICENSE).
+
+It covers what is in this repository: the integration workflows, the admission
+and routing implementation, the schemas, the regression suite, and the synthetic
+pilot source. It covers nothing that is only referenced from here. The private
+tooling is fetched at an immutable version and is not vendored, so it is not
+licensed by this file. The counterparty carries its own licence in its own
+repository.
+
 ## Status
 
 Prototype-000 is an **experimental, disposable architectural prototype**. It is
