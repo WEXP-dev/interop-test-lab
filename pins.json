@@ -2,7 +2,7 @@
   "note": "Public inputs are exactly pinned here. Private tooling is exact-pinned privately and fetched at that immutable version with a short-lived, repository-scoped, read-only credential; its version identity is verified during execution and is deliberately not part of this public record.",
   "record_kind": "interop-test-lab-pins",
   "subject": {
-    "commit": "8753d05f139d1cf0f0f63fa7a58a1886a27098b1",
+    "commit": "f739d98d899d27ef87e134c714eda858c5c3da5e",
     "repository": "WEXP-dev/interop-test-subject",
     "requires_token": false,
     "visibility": "public"
