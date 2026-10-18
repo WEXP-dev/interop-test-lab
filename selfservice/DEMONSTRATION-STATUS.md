@@ -49,14 +49,40 @@ run that must not proceed does not proceed.
   human authority decision taken once, in advance. Automation removed the
   per-request coordination, not the authority.
 
-## Freshness
+## Current access (2026-10-18)
 
-The evidence bundle from those runs is a GitHub Actions artifact and expires
-**2026-09-23**. After that date the run metadata remains public but the bundle
-does not. Publishing the bundle into this repository would need a publication
+The artifact listings for runs `32710096546` and `32713915779` each returned
+`total_count: 0` when checked on 2026-10-18. Their original evidence bundles
+cannot currently be downloaded from those listings. The run metadata and this
+historical account remain public; they are not substitutes for the full bundle.
+
+This is a limit on present evidence access, not a finding that the historical
+exercise failed. The envelope's `ACTIVE` status still concerns admission to its
+explicitly authorized synthetic class; artifact expiry does not widen or revoke
+that authority. The public intake is experimental and has no response-time
+commitment.
+
+Full independent repetition has an additional limit: [pins.json](../pins.json)
+identifies private tooling with runtime-verified private version identity. Its
+public `wexp-ref` input is pinned to an exact `draft-unmerged` commit. A reader
+without the private tooling cannot reproduce the complete laboratory execution
+from the public repositories alone. Neither that pin nor the pilot envelope is
+changed by this status update.
+
+## Retention and any future public example
+
+The original evidence bundle was stored as a GitHub Actions artifact with
+retention ending **2026-09-23**. The run metadata remains public; the two
+checked artifact listings no longer provide the bundle. Publishing the bundle into this repository would need a publication
 decision the pilot ticket did not grant — `publication_authorized` is `false` on
 `SS-PILOT-TICKET-001` — and this project does not publish run output that was
 not admitted in advance.
 
 If a durable public artifact is wanted, the correct route is a fresh run whose
 request admits publication, not a retroactive one.
+
+Any future public example needs a new scoped request, permitted public outputs,
+and a durable carrier with a manifest and reproduction instructions. Availability
+of such a bundle would allow inspection of its contents; a claim of independent
+execution reproducibility additionally needs accessible tooling and dependencies.
+This status update authorizes neither a new run nor publication of old outputs.
