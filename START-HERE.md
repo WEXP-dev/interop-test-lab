@@ -63,6 +63,13 @@ semantic result. What that did and did not establish is written down in
 It is available *only* for classes that have already been explicitly
 admitted, so no external system has been through it yet.
 
+**Evidence availability, reviewed 2026-10-18:** the original pilot bundles
+have passed their Actions retention date and are no longer listed on the two
+checked runs. Public run metadata and the description of the exercise remain.
+The [current evidence status](selfservice/DEMONSTRATION-STATUS.md#current-access-2026-10-18)
+distinguishes those records from a downloadable bundle and from independently
+repeating the full laboratory execution.
+
 **Review it with us** — for known semantics with operating conditions outside
 the automated class: private evidence, special disclosure handling, an
 unpinned source.
