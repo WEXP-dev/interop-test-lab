@@ -21,7 +21,7 @@ here instead.
 | 6 | What do you think that evidence lets you claim? | no | the gap between belief and support is often the finding |
 | 7 | Public example or test material? | no | whether anything can actually be run |
 | 8 | What are you unsure about? | no | frequently the most useful field |
-| 9 | Does this need private handling? | no | routed before any private material moves |
+| 9 | Does this need private handling? | no | chooses the track: routed to the [private track](PRIVATE-TRACK.md) before any private material moves |
 
 Only the name is required. A submission with a name and one public link is enough for the first
 reply to pin bytes, and the rest is worked out in the conversation.

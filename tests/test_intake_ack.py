@@ -276,6 +276,15 @@ class NextStepTest(unittest.TestCase):
                          f"-f pins='acme/receipts@{SHA_A}:r1.json'")
         self.assertNotIn("Sample Receipts", intake_ack.render(self.found()))
 
+    def test_a_mention_without_revision_is_not_counted_when_the_revision_is_given_too(self):
+        net = FakeNet({"https://www.ietf.org/archive/id/draft-noa-scitt-ai-agent-receipt-01.txt": b"text"})
+        body = form("https://datatracker.ietf.org/doc/draft-noa-scitt-ai-agent-receipt/ draft-noa-scitt-ai-agent-receipt-01")
+        found = intake_ack.examine(body, fetch=net)
+        self.assertEqual(len(found["drafts"]), 1)
+        self.assertEqual(found["drafts_without_revision"], 0)
+        alone = intake_ack.examine(form("https://datatracker.ietf.org/doc/draft-noa-scitt-ai-agent-receipt/"), fetch=net)
+        self.assertEqual(alone["drafts_without_revision"], 1)
+
     def test_the_command_carries_the_draft_pins_shown_in_the_reply(self):
         net = FakeNet({raw("acme", "receipts", SHA_A, "r1.json"): RECORD,
                        "https://www.ietf.org/archive/id/draft-ietf-rats-ear-04.txt": b"draft text"})
@@ -444,7 +453,25 @@ class RoutingTest(unittest.TestCase):
     def test_the_private_box_routes_to_review_and_says_send_nothing(self):
         found = intake_ack.examine(form(private=True), fetch=FakeNet({}))
         self.assertEqual(found["route_label"], "route:assisted")
-        self.assertIn("send nothing private here", intake_ack.render(found))
+        reply = intake_ack.render(found)
+        self.assertIn("**Track: private.**", reply)
+        self.assertIn("Send nothing private in this issue", reply)
+        self.assertIn("PRIVATE-TRACK.md", reply)
+        self.assertNotIn("Nothing more is needed from you now", reply)
+
+    def test_an_open_check_says_so_and_asks_for_a_link_when_nothing_was_pinned(self):
+        reply = intake_ack.render(intake_ack.examine(form(), fetch=FakeNet({})))
+        self.assertIn("**Track: open.**", reply)
+        self.assertIn("One thing is needed from you", reply)
+        self.assertNotIn("Nothing more is needed from you now", reply)
+
+    def test_the_private_track_gets_a_local_skeleton_command_and_never_the_public_workflow(self):
+        found = {**intake_ack.examine(form(private=True), fetch=FakeNet({}), login="dana"), "issue_number": 37}
+        command = intake_ack.scaffold_command(found)
+        self.assertTrue(command.startswith("python3 -B scripts/proposals/new_proposal.py --track private"))
+        self.assertIn("--root <directory outside any public repository>", command)
+        self.assertIn("--local-file <file received by email>", command)
+        self.assertNotIn("gh workflow run", intake_ack.render(found))
 
     def test_nothing_in_the_form_can_reach_the_automatic_route(self):
         text = form("route: SELF_SERVICE existing_mapping_known: true route:self-service")

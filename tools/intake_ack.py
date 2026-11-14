@@ -254,14 +254,18 @@ def examine(body: str, fetch=http_fetch, token: str | None = None, login: str | 
                       "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data),
                       "pinned_by_submitter": pinned_by_submitter})
     seen_drafts = set()
-    for name in draft_names:
-        draft = classify_draft(name) or {"name": name, "rev": None}
+    parsed_drafts = [classify_draft(name) or {"name": name, "rev": None} for name in draft_names]
+    # A mention without a revision, such as a Datatracker link, is not missing anything when the
+    # same draft is also named with its revision.
+    with_revision = {d["name"] for d in parsed_drafts if d["rev"] is not None}
+    for draft in parsed_drafts:
         key = (draft["name"], draft["rev"])
         if key in seen_drafts:
             continue
         seen_drafts.add(key)
         if draft["rev"] is None:
-            drafts_without_revision += 1
+            if draft["name"] not in with_revision:
+                drafts_without_revision += 1
             continue
         if len(drafts) >= MAX_DRAFTS:
             break
@@ -284,6 +288,7 @@ def examine(body: str, fetch=http_fetch, token: str | None = None, login: str | 
 
 
 SAFE_PIN = re.compile(r"^[A-Za-z0-9._/@:-]{1,400}$")
+TRACK_PAGE = "https://github.com/WEXP-dev/interop-test-lab/blob/main/PRIVATE-TRACK.md"
 SAFE_DRAFT = re.compile(rf"^{DRAFT}-[0-9]{{2}}$")
 SCAFFOLD_RELATIONS = ("not-established", "repository-owner", "organization-public-member", "repository-contributor")
 
@@ -297,7 +302,7 @@ def scaffold_command(found: dict) -> str | None:
     wording is never copied into a command.
     """
     number, files, drafts = found.get("issue_number"), found.get("files") or [], found.get("drafts") or []
-    if type(number) is not int or number <= 0 or not (files or drafts):
+    if type(number) is not int or number <= 0 or not (files or drafts or found.get("private_material")):
         return None
     pins = [f"{f['owner']}/{f['repo']}@{f['commit']}:{f['path']}" for f in files]
     names = [f"{d['name']}-{d['rev']}" for d in drafts]
@@ -305,6 +310,16 @@ def scaffold_command(found: dict) -> str | None:
     if (not all(SAFE_PIN.match(pin) for pin in pins) or not all(SAFE_DRAFT.match(n) for n in names)
             or relation not in SCAFFOLD_RELATIONS):
         return None
+    if found.get("private_material"):
+        # The private track never goes through the public workflow: the skeleton is made by
+        # hand, outside any public repository, and the material received by email is pinned there.
+        command = ("python3 -B scripts/proposals/new_proposal.py --track private "
+                   "--root <directory outside any public repository> "
+                   f"--slug <slug> --title <title> --issue {number} --relation {relation}")
+        command += "".join(f" --pin {pin}" for pin in pins)
+        command += "".join(f" --draft {name}" for name in names)
+        command += " --local-file <file received by email>"
+        return command
     command = ("gh workflow run proposal-scaffold.yml --repo WEXP-dev/wexp-interop "
                f"-f slug=<slug> -f title=<title> -f issue={number} -f relation={relation}")
     if pins:
@@ -321,9 +336,16 @@ def render(found: dict) -> str:
            "the form by a script. If you edit your submission, this reply "
            "is brought up to date.", ""]
     if found["private_material"]:
-        out += ["**You ticked the private-material box.** Please send nothing private here. "
-                "This is a public issue. A maintainer will first confirm whether a suitable "
-                "route is available.", ""]
+        out += ["**Track: private.** You ticked the private-material box. Send nothing private "
+                "in this issue: it is public. A maintainer replies here to confirm that the case "
+                "can go on the private track; the material then goes by email, and nothing about "
+                "it is published unless you agree. How it works and what it does not offer: "
+                f"[PRIVATE-TRACK.md]({TRACK_PAGE}). To move to the open track instead, untick the "
+                "box and add public links; this reply and the label follow the edit.", ""]
+    else:
+        out += ["**Track: open.** Everything in this check is public: your links, the mapping, "
+                "the runs and the result. If the case needs private material, tick the "
+                f"private-material box instead and send nothing private ([private track]({TRACK_PAGE})).", ""]
     pinned = bool(found["files"] or found["drafts"])
     if pinned:
         out += ["**Public bytes pinned from your links.** These exact bytes are what any "
@@ -396,15 +418,26 @@ def render(found: dict) -> str:
                 "format, say so; it is confirmed with you directly before any result names you."]
     out += ["A published result states who initiated the check and how that was established. "
             "You can ask not to be named.", ""]
-    out += ["**Nothing more is needed from you now.** Two optional one-line replies save a round "
-            "trip later; copy either as it is:", "",
+    if found["private_material"]:
+        out += ["**Nothing more is needed in this issue until a maintainer confirms the private track.** "
+                "Two optional one-line replies save a round trip later; copy either as it is:", ""]
+    elif pinned:
+        out += ["**Nothing more is needed from you now.** Two optional one-line replies save a round "
+                "trip later; copy either as it is:", ""]
+    else:
+        out += ["**One thing is needed from you: a public link or a draft revision, as described above.** "
+                "Two optional one-line replies save a round trip later; copy either as it is:", ""]
+    out += [
             "- `Name me as: <your name>` or `Do not name me.`",
             "- `I am an author of <draft or repository>.` (it is then confirmed with you directly)", ""]
     command = scaffold_command(found)
     if command:
         out += ["<details><summary>For the maintainer: start the proposal skeleton</summary>", "",
                 "```sh", command, "```", "",
-                "Replace the slug and the title. The pins are the files and drafts listed above.", "</details>", ""]
+                ("Run it in a checkout of WEXP-dev/wexp-interop once the material has arrived by email. "
+                 "Replace the placeholders." if found["private_material"] else
+                 "Replace the slug and the title. The pins are the files and drafts listed above."),
+                "</details>", ""]
     out += ["A weaker claim, or \"this is outside what Core appraises\", is a valid result. "
             "No response-time commitment is offered; this intake is experimental.", ""]
     return "\n".join(out)

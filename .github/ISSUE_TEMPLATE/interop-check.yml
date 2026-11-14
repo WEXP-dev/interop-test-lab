@@ -12,8 +12,9 @@ body:
 
         **Do not paste secrets, credentials, private keys, tokens, or confidential
         material here.** This is a public issue. If your case needs private
-        material, tick the box near the bottom and send nothing private — we will
-        first confirm whether a suitable route is available.
+        material, tick the box near the bottom and send nothing private. That puts
+        the check on the private track: a maintainer first confirms that the case can
+        go there, and then the material goes by email, not here. See PRIVATE-TRACK.md.
 
   - type: input
     id: name
@@ -84,7 +85,7 @@ body:
     attributes:
       label: Private material
       options:
-        - label: This case needs private evidence, confidential material, or special disclosure handling. (Tick this and send nothing private. We will first confirm whether a suitable route is available.)
+        - label: Private track. This case needs private evidence, confidential material, or special disclosure handling. (Tick this and send nothing private here. A maintainer first confirms that the case can go on the private track; the material then goes by email.)
           required: false
 
   - type: checkboxes
