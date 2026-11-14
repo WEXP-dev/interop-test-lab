@@ -1,12 +1,16 @@
 name: Intake acknowledgement
 
-# The automatic first reply to an interoperability check.
+# The automatic first reply to an interoperability check, kept up to date when
+# the submitter edits the submission.
 #
 # Two jobs, and the split is the point. `read` treats the submission as data:
 # it parses the form text, fetches public files named in it as bytes, and writes
 # the reply. It holds a read-only token, so nothing a submitter writes can reach
 # a write credential. `reply` holds the write permission and never sees the
-# submission: it posts the file `read` produced and sets one of two fixed labels.
+# submission: it posts the file `read` produced, or replaces its own earlier
+# reply with it, and on a new submission sets one of two fixed labels. To find
+# its earlier reply it asks only for the number of a comment written by the
+# workflow account that starts with a fixed marker; no comment text is read.
 #
 # Nothing a submitter controls is interpolated into a command. The event is read
 # from the runner's event file, never from an expression. No code from any other
@@ -14,7 +18,7 @@ name: Intake acknowledgement
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited]
 
 permissions:
   contents: read
@@ -92,5 +96,18 @@ jobs:
             route:research|route:assisted) ;;
             *) echo "::error::unexpected route label"; exit 1 ;;
           esac
-          gh issue comment "$ISSUE" --repo "$REPO" --body-file ack/reply.md
-          gh issue edit "$ISSUE" --repo "$REPO" --add-label "$label" --remove-label "route:unrouted"
+          event="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["event_action"])' ack/result.json)"
+          case "$event" in
+            opened|edited) ;;
+            *) echo "::error::unexpected event"; exit 1 ;;
+          esac
+          earlier="$(gh api "repos/$REPO/issues/$ISSUE/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- interop-intake-acknowledgement -->"))) | .id' | head -n 1)"
+          case "$earlier" in
+            "") gh issue comment "$ISSUE" --repo "$REPO" --body-file ack/reply.md ;;
+            *[!0-9]*) echo "::error::unexpected comment number"; exit 1 ;;
+            *) gh api --method PATCH "repos/$REPO/issues/comments/$earlier" -F body=@ack/reply.md --silent ;;
+          esac
+          if [ "$event" = "opened" ]; then
+            gh issue edit "$ISSUE" --repo "$REPO" --add-label "$label" --remove-label "route:unrouted"
+          fi
