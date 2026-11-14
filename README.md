@@ -126,7 +126,7 @@ on purpose:
   submission as data and holds a read-only token: it pins the public files the
   submission links to and writes the first reply. A second job, which never
   sees the submission, posts that reply, or replaces its own earlier reply, and on a
-  new submission sets a route label from a fixed pair. Nothing from the submission is interpolated into a command, and the
+  sets the route label from a fixed pair, replacing the other one when an edit changes the route. Nothing from the submission is interpolated into a command, and the
   route is never taken from the form.
 
 The regression suite in

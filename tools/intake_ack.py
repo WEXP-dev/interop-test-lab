@@ -284,32 +284,41 @@ def examine(body: str, fetch=http_fetch, token: str | None = None, login: str | 
 
 
 SAFE_PIN = re.compile(r"^[A-Za-z0-9._/@:-]{1,400}$")
+SAFE_DRAFT = re.compile(rf"^{DRAFT}-[0-9]{{2}}$")
 SCAFFOLD_RELATIONS = ("not-established", "repository-owner", "organization-public-member", "repository-contributor")
 
 
 def scaffold_command(found: dict) -> str | None:
     """The command that starts the proposal skeleton for this check, from validated values only.
 
-    Given only when every pinned file can be written without quoting. The slug and the title are
-    left for the maintainer: the submitter's wording is never copied into a command.
+    It carries every pin the reply shows: the GitHub files and the Internet-Draft revisions, so
+    the skeleton freezes the same sources the reply listed. Given only when every value can be
+    written without quoting. The slug and the title are left for the maintainer: the submitter's
+    wording is never copied into a command.
     """
-    number, files = found.get("issue_number"), found.get("files") or []
-    if type(number) is not int or number <= 0 or not files:
+    number, files, drafts = found.get("issue_number"), found.get("files") or [], found.get("drafts") or []
+    if type(number) is not int or number <= 0 or not (files or drafts):
         return None
     pins = [f"{f['owner']}/{f['repo']}@{f['commit']}:{f['path']}" for f in files]
+    names = [f"{d['name']}-{d['rev']}" for d in drafts]
     relation = found["initiator"]["relation"]
-    if not all(SAFE_PIN.match(pin) for pin in pins) or relation not in SCAFFOLD_RELATIONS:
+    if (not all(SAFE_PIN.match(pin) for pin in pins) or not all(SAFE_DRAFT.match(n) for n in names)
+            or relation not in SCAFFOLD_RELATIONS):
         return None
-    return ("gh workflow run proposal-scaffold.yml --repo WEXP-dev/wexp-interop "
-            f"-f slug=<slug> -f title=<title> -f issue={number} -f relation={relation} "
-            f"-f pins='{' '.join(pins)}'")
+    command = ("gh workflow run proposal-scaffold.yml --repo WEXP-dev/wexp-interop "
+               f"-f slug=<slug> -f title=<title> -f issue={number} -f relation={relation}")
+    if pins:
+        command += f" -f pins='{' '.join(pins)}'"
+    if names:
+        command += f" -f drafts='{' '.join(names)}'"
+    return command
 
 
 def render(found: dict) -> str:
     """The reply. Built from validated values; the submitter's prose is never quoted."""
     out = [MARKER,
-           "Thank you. This reply is automatic: it was produced from the form within minutes, "
-           "and nobody has read your submission yet. If you edit your submission, this reply "
+           "Thank you. This reply is automatic and is not a human review: it was produced from "
+           "the form by a script. If you edit your submission, this reply "
            "is brought up to date.", ""]
     if found["private_material"]:
         out += ["**You ticked the private-material box.** Please send nothing private here. "
@@ -395,7 +404,7 @@ def render(found: dict) -> str:
     if command:
         out += ["<details><summary>For the maintainer: start the proposal skeleton</summary>", "",
                 "```sh", command, "```", "",
-                "Replace the slug and the title. The pins are the files listed above.", "</details>", ""]
+                "Replace the slug and the title. The pins are the files and drafts listed above.", "</details>", ""]
     out += ["A weaker claim, or \"this is outside what Core appraises\", is a valid result. "
             "No response-time commitment is offered; this intake is experimental.", ""]
     return "\n".join(out)
