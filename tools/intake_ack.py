@@ -283,6 +283,28 @@ def examine(body: str, fetch=http_fetch, token: str | None = None, login: str | 
             "route_label": ROUTE_LABELS[decision["route"]]}
 
 
+SAFE_PIN = re.compile(r"^[A-Za-z0-9._/@:-]{1,400}$")
+SCAFFOLD_RELATIONS = ("not-established", "repository-owner", "organization-public-member", "repository-contributor")
+
+
+def scaffold_command(found: dict) -> str | None:
+    """The command that starts the proposal skeleton for this check, from validated values only.
+
+    Given only when every pinned file can be written without quoting. The slug and the title are
+    left for the maintainer: the submitter's wording is never copied into a command.
+    """
+    number, files = found.get("issue_number"), found.get("files") or []
+    if type(number) is not int or number <= 0 or not files:
+        return None
+    pins = [f"{f['owner']}/{f['repo']}@{f['commit']}:{f['path']}" for f in files]
+    relation = found["initiator"]["relation"]
+    if not all(SAFE_PIN.match(pin) for pin in pins) or relation not in SCAFFOLD_RELATIONS:
+        return None
+    return ("gh workflow run proposal-scaffold.yml --repo WEXP-dev/wexp-interop "
+            f"-f slug=<slug> -f title=<title> -f issue={number} -f relation={relation} "
+            f"-f pins='{' '.join(pins)}'")
+
+
 def render(found: dict) -> str:
     """The reply. Built from validated values; the submitter's prose is never quoted."""
     out = [MARKER,
@@ -365,6 +387,15 @@ def render(found: dict) -> str:
                 "format, say so; it is confirmed with you directly before any result names you."]
     out += ["A published result states who initiated the check and how that was established. "
             "You can ask not to be named.", ""]
+    out += ["**Nothing more is needed from you now.** Two optional one-line replies save a round "
+            "trip later; copy either as it is:", "",
+            "- `Name me as: <your name>` or `Do not name me.`",
+            "- `I am an author of <draft or repository>.` (it is then confirmed with you directly)", ""]
+    command = scaffold_command(found)
+    if command:
+        out += ["<details><summary>For the maintainer: start the proposal skeleton</summary>", "",
+                "```sh", command, "```", "",
+                "Replace the slug and the title. The pins are the files listed above.", "</details>", ""]
     out += ["A weaker claim, or \"this is outside what Core appraises\", is a valid result. "
             "No response-time commitment is offered; this intake is experimental.", ""]
     return "\n".join(out)
@@ -394,6 +425,8 @@ def main() -> int:
         return 0
     found = examine(body, token=os.environ.get(args.token_env) or None,
                     login=author if isinstance(author, str) else None)
+    number = issue.get("number")
+    found["issue_number"] = number if type(number) is int and number > 0 else None
     args.comment.write_text(render(found), encoding="utf-8")
     args.result.write_text(json.dumps({"action": "reply", "event_action": action, **found},
                                       indent=1, sort_keys=True) + "\n",

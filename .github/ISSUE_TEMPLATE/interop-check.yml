@@ -6,7 +6,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Fill in what you know. Blank fields are fine — say "not sure" and we will work it out.
+        **The short way: give a name and one link, tick the last box, submit.** Everything
+        else is optional. Blank fields are fine and we will work it out with you.
         You do not need to know anything about how WEXP works internally.
 
         **Do not paste secrets, credentials, private keys, tokens, or confidential
@@ -43,17 +44,15 @@ body:
     id: evidence
     attributes:
       label: What evidence, record or result does it produce?
-      description: In your own words. A receipt? A signed attestation? A log entry? Something else?
-    validations:
-      required: true
+      description: Optional. In your own words. A receipt? A signed attestation? A log entry? Something else?
 
   - type: textarea
     id: question
     attributes:
       label: What do you want to find out?
-      description: The question you actually care about, however informally you want to put it.
-    validations:
-      required: true
+      description: >-
+        Optional. The question you actually care about, however informally you want to put it.
+        Left blank, it is read as "what can this evidence support?".
 
   - type: textarea
     id: believed_claim

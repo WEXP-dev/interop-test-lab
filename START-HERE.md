@@ -42,9 +42,12 @@ until it is useful to you.
 
 ## What you need to provide
 
-Only what you already have: what the system is called, a public source if there
-is one, what evidence it produces, and what you want to find out. "Not sure" is
-an acceptable answer to most of it.
+**The short way: a name and one link.** Only the name is required. Everything
+else is optional: a public source if there is one, what evidence it produces,
+what you want to find out. "Not sure" and a blank field are both acceptable.
+
+If somebody sent you a link to this form, it may arrive already filled in. Read
+it, tick the confirmation, and submit.
 
 If a sample record is public on GitHub, link the file. If the format is described
 in an Internet-Draft, name the draft with its revision, such as
