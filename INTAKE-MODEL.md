@@ -46,6 +46,16 @@ Two of these are deliberately **not** submitter-supplied.
 WEXP side, because a submitter who could set them could route themselves onto
 the automatic path.
 
+## The automatic first reply
+
+`tools/intake_ack.py` reads a submission made through the current adapter and
+prepares the first reply: the public files it could pin from the links given
+(repository, commit, path, SHA-256, size) and the route from `routing.py`. It
+takes one fact from the form, the answer to question 9. It quotes nothing the
+submitter wrote, fetches from two fixed hosts only, and executes nothing it
+reads. `.github/workflows/intake-acknowledge.yml` runs it in a job that cannot
+write, and a second job that never sees the submission posts the result.
+
 ## What portability means here, and what it does not
 
 A future web form or email-assisted intake would replace the adapter and reuse

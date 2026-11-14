@@ -46,11 +46,18 @@ Only what you already have: what the system is called, a public source if there
 is one, what evidence it produces, and what you want to find out. "Not sure" is
 an acceptable answer to most of it.
 
+If a sample record is public on GitHub, link the file. The first reply can then
+pin its exact bytes, and everything after that refers to those bytes.
+
 **Do not send secrets, credentials, private keys, tokens, or confidential
 material.** The form is a public issue. If your case needs private handling, say
 so — and send nothing private until we confirm whether a suitable route is available.
 
 ## What happens after you submit
+
+**An automatic reply arrives within minutes.** It lists the public files it could
+pin from your links (repository, commit, path, SHA-256 and size) and names the
+route. Nobody has read your submission at that point; the reply says so.
 
 We first determine which route applies. Routing is determined from the case
 itself, not from requester preference.
@@ -107,6 +114,12 @@ There is a worked example of what one looks like:
 WEXP is a **claim-strength layer for digital execution evidence**. It helps
 determine *how strong a claim execution evidence can support, given where and
 how it was witnessed*.
+
+The current specification text is the Internet-Draft
+[draft-sergeev-wexp-core-02](https://datatracker.ietf.org/doc/draft-sergeev-wexp-core/02/).
+It is an individual draft, not a standard. For a new format, the work is a
+written mapping from your record to that draft's normalized input, agreed with
+you before anything is run.
 
 WEXP Interop examines whether evidence from another system can support a bounded
 WEXP claim **without either side giving up authority over its own semantics**.

@@ -113,6 +113,13 @@ on purpose:
   re-validated with trusted code before any admission decision. A green pull
   request never causes execution by itself.
 
+- **Intake acknowledgement** runs when an issue is opened. One job reads the
+  submission as data and holds a read-only token: it pins the public files the
+  submission links to and writes the first reply. A second job, which never
+  sees the submission, posts that reply and sets a route label from a fixed
+  pair. Nothing from the submission is interpolated into a command, and the
+  route is never taken from the form.
+
 The regression suite in
 [`.github/workflows/checks.yml`](.github/workflows/checks.yml) also runs on pull
 requests, for the same reason: the checks that guard the boundary should run on
