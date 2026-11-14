@@ -1,0 +1,162 @@
+name: Appraiser run on the public corpus
+
+# Started by a maintainer for an implementation of the Core-02 appraisal
+# procedure that somebody else wrote. Three jobs, and the split is the point.
+#
+# `inputs` is trusted: it checks the pinned corpora by digest and hands on the
+# inputs only, with no expectation.
+#
+# `run` is the only job in which the external code exists. It holds a read-only
+# token for this public repository and no secret, checks out that code at an
+# exact commit, and keeps what it printed for each case.
+#
+# `compare` is trusted and never checks out or executes the external code. It
+# reads what `run` kept as bytes, compares each result with the frozen
+# expectation, and writes the summary.
+#
+# The values a maintainer types are passed through the environment and checked
+# before use; none is interpolated into a command.
+
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Public repository of the implementation: owner/name'
+        required: true
+      commit:
+        description: 'Full commit id to run'
+        required: true
+      entry:
+        description: 'Command that takes --input <file> --profiles <file> and prints the result as JSON'
+        required: true
+        default: 'python3 -B -m wexp_check'
+      setup:
+        description: 'Optional build command, run once in the checkout before the cases'
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  VECTORS_COMMIT: edd67056873502a2c3cecf5dd2b8db71271c2f57
+
+jobs:
+  inputs:
+    name: pin the corpora and hand on the inputs only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Write the inputs
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/WEXP-dev/wexp-vectors.git "$RUNNER_TEMP/wexp-vectors"
+          git -C "$RUNNER_TEMP/wexp-vectors" checkout --quiet "$VECTORS_COMMIT"
+          python3 -I -B tools/appraiser_run.py inputs \
+            --corpus "$RUNNER_TEMP/wexp-vectors/vectors/WEXP-CORE-02-VECTORS-001/corpus.json" \
+            --corpus "$RUNNER_TEMP/wexp-vectors/vectors/WEXP-CORE-02-VECTORS-002/corpus.json" \
+            --out "$RUNNER_TEMP/corpus-inputs"
+      - name: Hand the inputs on
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: corpus-inputs
+          path: ${{ runner.temp }}/corpus-inputs/
+          if-no-files-found: error
+          retention-days: 7
+
+  run:
+    name: run the external implementation
+    needs: inputs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          path: lab
+      - name: Receive the inputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: corpus-inputs
+          path: corpus-inputs
+      - name: Check out the implementation at the exact commit
+        env:
+          IMPLEMENTATION: ${{ inputs.repository }}
+          IMPLEMENTATION_COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          case "$IMPLEMENTATION" in
+            */*/*|*[!A-Za-z0-9._/-]*|''|.*|*/.*|-*) echo "::error::repository must be owner/name"; exit 1 ;;
+            */*) ;;
+            *) echo "::error::repository must be owner/name"; exit 1 ;;
+          esac
+          case "$IMPLEMENTATION_COMMIT" in
+            *[!0-9a-f]*|'') echo "::error::a full commit id is required"; exit 1 ;;
+          esac
+          [ "${#IMPLEMENTATION_COMMIT}" -eq 40 ] || { echo "::error::a full commit id is required"; exit 1; }
+          git clone --quiet "https://github.com/${IMPLEMENTATION}.git" implementation
+          git -C implementation checkout --quiet "$IMPLEMENTATION_COMMIT"
+      - name: Build, if a build command was given
+        env:
+          SETUP: ${{ inputs.setup }}
+        working-directory: implementation
+        run: |
+          set -euo pipefail
+          if [ -n "$SETUP" ]; then bash -c "$SETUP"; fi
+      - name: Run every case
+        env:
+          ENTRY: ${{ inputs.entry }}
+        run: |
+          set -euo pipefail
+          python3 -I -B lab/tools/appraiser_run.py run \
+            --inputs corpus-inputs --out "$RUNNER_TEMP/appraiser-outputs" --cwd implementation
+      - name: Hand the outputs across the boundary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: appraiser-outputs
+          path: ${{ runner.temp }}/appraiser-outputs/
+          if-no-files-found: error
+          retention-days: 14
+
+  compare:
+    name: compare with the frozen expectations
+    needs: run
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Receive the outputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: appraiser-outputs
+          path: ${{ runner.temp }}/appraiser-outputs
+      - name: Compare and write the summary
+        env:
+          IMPLEMENTATION: ${{ inputs.repository }}
+          IMPLEMENTATION_COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          git clone --quiet https://github.com/WEXP-dev/wexp-vectors.git "$RUNNER_TEMP/wexp-vectors"
+          git -C "$RUNNER_TEMP/wexp-vectors" checkout --quiet "$VECTORS_COMMIT"
+          mkdir -p "$RUNNER_TEMP/appraiser-result"
+          python3 -I -B tools/appraiser_run.py compare \
+            --corpus "$RUNNER_TEMP/wexp-vectors/vectors/WEXP-CORE-02-VECTORS-001/corpus.json" \
+            --corpus "$RUNNER_TEMP/wexp-vectors/vectors/WEXP-CORE-02-VECTORS-002/corpus.json" \
+            --outputs "$RUNNER_TEMP/appraiser-outputs" \
+            --result "$RUNNER_TEMP/appraiser-result/result.json" \
+            --summary "$RUNNER_TEMP/appraiser-result/summary.md" > /dev/null
+          cat "$RUNNER_TEMP/appraiser-result/summary.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Keep the result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: appraiser-result
+          path: ${{ runner.temp }}/appraiser-result/
+          if-no-files-found: error
+          retention-days: 30

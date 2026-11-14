@@ -158,6 +158,12 @@ like it exposes new semantics, it stops for review and adjudication rather than
 being guessed at or quietly adopted. Repetition does not ratify semantics.
 Neither does commercial interest.
 
+## If you wrote your own implementation
+
+An implementation of the Core-02 appraisal procedure written by somebody else
+can be run here on the public corpus. See
+[Bring an implementation](BRING-AN-IMPLEMENTATION.md).
+
 ## Start
 
 **→ [Start an interoperability check](https://github.com/WEXP-dev/interop-test-lab/issues/new?template=interop-check.yml)**

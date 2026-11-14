@@ -113,6 +113,14 @@ on purpose:
   re-validated with trusted code before any admission decision. A green pull
   request never causes execution by itself.
 
+- **Appraiser run on the public corpus** is started by a maintainer for an
+  implementation of the Core-02 appraisal procedure that somebody else wrote
+  ([how to bring one](BRING-AN-IMPLEMENTATION.md)). One job hands on the corpus
+  inputs without their expectations. A second job, the only one in which the
+  external code exists, holds no secret and keeps what the code printed. A third
+  job, which never checks out or runs that code, compares the printed results
+  with the frozen expectations as data.
+
 - **Intake acknowledgement** runs when an issue is opened, and again when its
   author edits it. One job reads the
   submission as data and holds a read-only token: it pins the public files the
