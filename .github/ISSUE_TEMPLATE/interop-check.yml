@@ -71,7 +71,8 @@ body:
       description: >-
         Optional. A link to a sample record, a test vector, a fixture. Public
         material only. A link to a file on GitHub lets the automatic first reply
-        pin its exact bytes; a link at an exact commit is best.
+        pin its exact bytes; a link at an exact commit is best. An Internet-Draft
+        can be named with its revision, such as draft-example-record-02.
 
   - type: textarea
     id: uncertain

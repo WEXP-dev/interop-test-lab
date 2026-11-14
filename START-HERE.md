@@ -46,8 +46,10 @@ Only what you already have: what the system is called, a public source if there
 is one, what evidence it produces, and what you want to find out. "Not sure" is
 an acceptable answer to most of it.
 
-If a sample record is public on GitHub, link the file. The first reply can then
-pin its exact bytes, and everything after that refers to those bytes.
+If a sample record is public on GitHub, link the file. If the format is described
+in an Internet-Draft, name the draft with its revision, such as
+`draft-example-record-02`. The first reply can then pin the exact bytes, and
+everything after that refers to those bytes.
 
 **Do not send secrets, credentials, private keys, tokens, or confidential
 material.** The form is a public issue. If your case needs private handling, say
@@ -57,7 +59,17 @@ so — and send nothing private until we confirm whether a suitable route is ava
 
 **An automatic reply arrives within minutes.** It lists the public files it could
 pin from your links (repository, commit, path, SHA-256 and size) and names the
-route. Nobody has read your submission at that point; the reply says so.
+route. Nobody has read your submission at that point; the reply says so. If you
+edit your submission, for example to add a link, the reply updates itself.
+
+The reply also says what GitHub shows about the account that opened the check:
+whether it owns a linked repository, is a public member of the organization that
+owns it, or has commits in it. A published result states who initiated the check
+and how that was established: an author of the format, the owner of a named
+repository, a contributor, or someone with no established link to it. Authorship
+of an Internet-Draft is never taken from the form; it is confirmed with the
+person directly. You can ask not to be named, and the result then says only that
+the check was initiated by a party who asked not to be named.
 
 We first determine which route applies. Routing is determined from the case
 itself, not from requester preference.

@@ -52,8 +52,15 @@ the automatic path.
 prepares the first reply: the public files it could pin from the links given
 (repository, commit, path, SHA-256, size) and the route from `routing.py`. It
 takes one fact from the form, the answer to question 9. It quotes nothing the
-submitter wrote, fetches from two fixed hosts only, and executes nothing it
-reads. `.github/workflows/intake-acknowledge.yml` runs it in a job that cannot
+submitter wrote, fetches from three fixed hosts only (the GitHub API, GitHub raw
+content, and the IETF archive of Internet-Draft revisions), and executes nothing
+it reads. An Internet-Draft named with its revision is pinned by the SHA-256 of
+its archived text. The reply also records what GitHub shows publicly about the
+submitting account and the linked repositories (owner, public organization
+member, contributor, or no established link); a statement by the submitter about
+who they are is never taken from the form. When the submitter edits an open
+submission the reply is rebuilt and replaces the earlier one; an edit by anyone
+else is ignored. `.github/workflows/intake-acknowledge.yml` runs it in a job that cannot
 write, and a second job that never sees the submission posts the result.
 
 ## What portability means here, and what it does not

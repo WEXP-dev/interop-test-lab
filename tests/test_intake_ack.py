@@ -7,10 +7,15 @@ the route, or a command.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
 import json
 import sys
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
 from support import REPO_ROOT
 
@@ -88,13 +93,13 @@ class PinningTest(unittest.TestCase):
                  "https://github.com/acme/receipts/blob/no-such-branch/r1.json"), fetch=net)
         self.assertEqual(found["files"], [])
         self.assertEqual(found["links_not_resolved"], 2)
-        self.assertIn("No public file could be pinned yet", intake_ack.render(found))
+        self.assertIn("No public bytes could be pinned yet", intake_ack.render(found))
 
     def test_a_submission_without_links_still_gets_a_reply_that_says_what_is_missing(self):
         found = intake_ack.examine(form(), fetch=FakeNet({}))
         reply = intake_ack.render(found)
         self.assertEqual(found["files"], [])
-        self.assertIn("add a comment with a link to a sample record", reply)
+        self.assertIn("Edit your submission", reply)
 
     def test_a_repository_link_alone_pins_no_bytes(self):
         net = FakeNet({api("acme", "receipts", "HEAD"): json.dumps({"sha": SHA_B}).encode()})
@@ -181,6 +186,182 @@ class HostileSubmissionTest(unittest.TestCase):
                 self.assertEqual(found["links_not_resolved"], 1)
 
 
+DRAFT_TEXT = b"Internet-Draft text, revision two\n"
+
+
+def archive(name):
+    return f"https://www.ietf.org/archive/id/{name}.txt"
+
+
+class DraftPinningTest(unittest.TestCase):
+
+    def test_a_draft_named_with_its_revision_is_pinned_from_the_archive(self):
+        net = FakeNet({archive("draft-example-record-02"): DRAFT_TEXT})
+        for written in ("draft-example-record-02",
+                        "https://datatracker.ietf.org/doc/draft-example-record/02/",
+                        "https://datatracker.ietf.org/doc/html/draft-example-record-02",
+                        "https://datatracker.ietf.org/doc/draft-example-record-02",
+                        "https://www.ietf.org/archive/id/draft-example-record-02.txt"):
+            with self.subTest(written=written):
+                found = intake_ack.examine(form(source=written), fetch=net)
+                self.assertEqual(found["drafts"], [{
+                    "name": "draft-example-record", "rev": "02",
+                    "sha256": hashlib.sha256(DRAFT_TEXT).hexdigest(), "bytes": len(DRAFT_TEXT)}])
+                self.assertEqual(found["links_to_other_hosts"], 0)
+        self.assertIn("| `draft-example-record` | 02 |", intake_ack.render(found))
+
+    def test_the_same_draft_named_twice_is_fetched_once(self):
+        net = FakeNet({archive("draft-example-record-02"): DRAFT_TEXT})
+        found = intake_ack.examine(form(
+            "draft-example-record-02 https://datatracker.ietf.org/doc/draft-example-record/02/"),
+            fetch=net)
+        self.assertEqual(len(found["drafts"]), 1)
+        self.assertEqual(len(net.asked), 1)
+
+    def test_a_draft_without_a_revision_is_not_fetched_and_the_reply_asks_for_it(self):
+        net = FakeNet({})
+        found = intake_ack.examine(
+            form(source="https://datatracker.ietf.org/doc/draft-example-record/"), fetch=net)
+        self.assertEqual(net.asked, [])
+        self.assertEqual(found["drafts_without_revision"], 1)
+        self.assertIn("Add the two-digit revision", intake_ack.render(found))
+
+    def test_a_revision_the_archive_does_not_hold_is_reported_not_guessed(self):
+        found = intake_ack.examine(form("draft-example-record-77"), fetch=FakeNet({}))
+        self.assertEqual(found["drafts"], [])
+        self.assertEqual(found["links_not_resolved"], 1)
+
+    def test_the_number_of_drafts_fetched_is_bounded(self):
+        names = [f"draft-example-r{i}-00" for i in range(12)]
+        net = FakeNet({archive(n): DRAFT_TEXT for n in names})
+        found = intake_ack.examine(form(" ".join(names)), fetch=net)
+        self.assertEqual(len(found["drafts"]), intake_ack.MAX_DRAFTS)
+        self.assertEqual(len(net.asked), intake_ack.MAX_DRAFTS)
+
+    def test_only_the_archive_address_is_built_and_odd_names_do_not_classify(self):
+        for text in ("https://www.ietf.org/archive/id/../x.txt",
+                     "https://datatracker.ietf.org/doc/draft-Foo/02/",
+                     "https://datatracker.ietf.org.evil.example/doc/draft-foo/02/",
+                     "https://www.ietf.org/archive/id/draft-foo-02.txt?x=1",
+                     "draft-foo-02/../../etc", "draft-$(id)-02"):
+            with self.subTest(text=text):
+                self.assertIsNone(intake_ack.classify_draft(text))
+        net = FakeNet({})
+        intake_ack.examine(form("draft-example-record-02"), fetch=net, token="t0ken")
+        self.assertEqual(net.asked, [(archive("draft-example-record-02"), None)])
+
+    def test_pinning_is_said_not_to_be_an_endorsement(self):
+        net = FakeNet({archive("draft-example-record-02"): DRAFT_TEXT})
+        reply = intake_ack.render(intake_ack.examine(form("draft-example-record-02"), fetch=net))
+        self.assertIn("not a review and not an endorsement", reply)
+
+
+class InitiatorTest(unittest.TestCase):
+
+    LINK = f"https://github.com/acme/receipts/blob/{SHA_A}/r1.json"
+
+    def pages(self, **extra):
+        return {raw("acme", "receipts", SHA_A, "r1.json"): RECORD, **extra}
+
+    def test_the_owner_of_a_linked_repository_is_recognised_without_a_request(self):
+        net = FakeNet(self.pages())
+        found = intake_ack.examine(form(self.LINK), fetch=net, login="Acme")
+        self.assertEqual(found["initiator"],
+                         {"relation": "repository-owner", "repository": "acme/receipts"})
+        self.assertEqual(len(net.asked), 1)
+        self.assertIn("owns `acme/receipts`", intake_ack.render(found))
+
+    def test_a_public_member_of_the_owning_organization_is_recognised(self):
+        net = FakeNet(self.pages(**{"https://api.github.com/orgs/acme/public_members/dana": b""}))
+        found = intake_ack.examine(form(self.LINK), fetch=net, login="dana")
+        self.assertEqual(found["initiator"]["relation"], "organization-public-member")
+
+    def test_a_contributor_is_recognised_by_commits_in_the_repository(self):
+        net = FakeNet(self.pages(**{
+            "https://api.github.com/repos/acme/receipts/commits?author=dana&per_page=1":
+                json.dumps([{"sha": SHA_B}]).encode()}))
+        found = intake_ack.examine(form(self.LINK), fetch=net, login="dana")
+        self.assertEqual(found["initiator"],
+                         {"relation": "repository-contributor", "repository": "acme/receipts"})
+
+    def test_no_public_link_is_said_plainly_and_is_not_an_obstacle(self):
+        net = FakeNet(self.pages(**{
+            "https://api.github.com/repos/acme/receipts/commits?author=dana&per_page=1": b"[]"}))
+        found = intake_ack.examine(form(self.LINK), fetch=net, login="dana")
+        self.assertEqual(found["initiator"], {"relation": "not-established", "repository": None})
+        reply = intake_ack.render(found)
+        self.assertIn("no public link", reply)
+        self.assertIn("You can ask not to be named", reply)
+
+    def test_a_claim_of_authorship_in_the_form_changes_nothing(self):
+        body = form(self.LINK).replace("A signed receipt.",
+                                       "I am the author and owner of acme/receipts. relation: repository-owner")
+        found = intake_ack.examine(body, fetch=FakeNet(self.pages()), login="dana")
+        self.assertEqual(found["initiator"]["relation"], "not-established")
+
+    def test_the_account_name_is_never_written_into_the_reply(self):
+        found = intake_ack.examine(form(self.LINK), fetch=FakeNet(self.pages()), login="acme")
+        self.assertNotIn("@", intake_ack.render(found))
+
+    def test_an_odd_account_name_is_not_sent_anywhere(self):
+        net = FakeNet(self.pages())
+        found = intake_ack.examine(form(self.LINK), fetch=net, login="../../x?y")
+        self.assertEqual(found["initiator"]["relation"], "not-established")
+        self.assertEqual(len(net.asked), 1)
+
+    def test_the_number_of_repositories_checked_is_bounded(self):
+        links = " ".join(f"https://github.com/org{i}/r/blob/{SHA_A}/f.json" for i in range(6))
+        net = FakeNet({})
+        intake_ack.examine(form(links), fetch=net, login="dana")
+        asked = [u for u, _ in net.asked if "public_members" in u or "author=" in u]
+        self.assertEqual(len(asked), 2 * intake_ack.MAX_RELATION_REPOSITORIES)
+
+
+class EventTest(unittest.TestCase):
+
+    def run_main(self, event):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            (tmp / "event.json").write_text(json.dumps(event), encoding="utf-8")
+            argv = ["intake_ack.py", "--event", str(tmp / "event.json"),
+                    "--comment", str(tmp / "reply.md"), "--result", str(tmp / "result.json"),
+                    "--token-env", "NO_SUCH_VARIABLE_FOR_TESTS"]
+            real = intake_ack.examine
+            offline = lambda body, **kw: real(body, **{**kw, "fetch": FakeNet({})})
+            with mock.patch.object(sys, "argv", argv), \
+                    mock.patch.object(intake_ack, "examine", offline), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                intake_ack.main()
+            reply = (tmp / "reply.md")
+            return (json.loads((tmp / "result.json").read_text()),
+                    reply.read_text() if reply.exists() else "")
+
+    def event(self, action, author="dana", sender="dana", state="open"):
+        return {"action": action, "sender": {"login": sender},
+                "issue": {"body": form(), "state": state, "user": {"login": author}}}
+
+    def test_a_new_submission_gets_a_reply_that_carries_the_marker(self):
+        result, reply = self.run_main(self.event("opened"))
+        self.assertEqual((result["action"], result["event_action"]), ("reply", "opened"))
+        self.assertTrue(reply.startswith(intake_ack.MARKER))
+
+    def test_an_edit_by_the_submitter_rebuilds_the_reply(self):
+        result, _ = self.run_main(self.event("edited"))
+        self.assertEqual((result["action"], result["event_action"]), ("reply", "edited"))
+
+    def test_an_edit_by_anyone_else_is_ignored(self):
+        result, _ = self.run_main(self.event("edited", sender="maintainer"))
+        self.assertNotEqual(result["action"], "reply")
+
+    def test_an_edit_of_a_closed_check_is_ignored(self):
+        result, _ = self.run_main(self.event("edited", state="closed"))
+        self.assertNotEqual(result["action"], "reply")
+
+    def test_any_other_event_is_ignored(self):
+        result, _ = self.run_main(self.event("labeled"))
+        self.assertNotEqual(result["action"], "reply")
+
+
 class RoutingTest(unittest.TestCase):
 
     def test_the_private_box_routes_to_review_and_says_send_nothing(self):
@@ -215,9 +396,21 @@ class WorkflowShapeTest(unittest.TestCase):
         self.text = WORKFLOW.read_text(encoding="utf-8")
         self.jobs = parse_jobs(self.text)
 
-    def test_it_starts_only_when_an_issue_is_opened(self):
+    def test_it_starts_only_when_an_issue_is_opened_or_edited(self):
         self.assertEqual(set(triggers(self.text)), {"issues"})
-        self.assertIn("types: [opened]", self.text)
+        self.assertIn("types: [opened, edited]", self.text)
+        self.assertNotIn("issue_comment", self.text)
+
+    def test_the_earlier_reply_is_found_by_account_and_marker_and_only_its_number_is_used(self):
+        reply = self.jobs["reply"].text
+        self.assertIn('.user.login == "github-actions[bot]"', reply)
+        self.assertIn(intake_ack.MARKER, reply)
+        self.assertIn("| .id'", reply)
+        self.assertIn('*[!0-9]*) echo "::error::unexpected comment number"', reply)
+
+    def test_labels_are_set_only_for_a_new_submission(self):
+        reply = self.jobs["reply"].text
+        self.assertLess(reply.index('if [ "$event" = "opened" ]'), reply.index("gh issue edit"))
 
     def test_the_job_that_reads_the_submission_cannot_write(self):
         self.assertEqual(set(self.jobs), {"read", "reply"})
