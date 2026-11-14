@@ -68,7 +68,10 @@ body:
     id: example
     attributes:
       label: Public example or test material
-      description: Optional. A link to a sample record, a test vector, a fixture. Public material only.
+      description: >-
+        Optional. A link to a sample record, a test vector, a fixture. Public
+        material only. A link to a file on GitHub lets the automatic first reply
+        pin its exact bytes; a link at an exact commit is best.
 
   - type: textarea
     id: uncertain

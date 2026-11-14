@@ -1,0 +1,96 @@
+name: Intake acknowledgement
+
+# The automatic first reply to an interoperability check.
+#
+# Two jobs, and the split is the point. `read` treats the submission as data:
+# it parses the form text, fetches public files named in it as bytes, and writes
+# the reply. It holds a read-only token, so nothing a submitter writes can reach
+# a write credential. `reply` holds the write permission and never sees the
+# submission: it posts the file `read` produced and sets one of two fixed labels.
+#
+# Nothing a submitter controls is interpolated into a command. The event is read
+# from the runner's event file, never from an expression. No code from any other
+# repository is checked out or executed, and no route is taken from the form.
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intake-acknowledge-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  read:
+    name: read the submission as data
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.12'
+
+      - name: Pin public bytes and write the reply
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ack"
+          python3 -I -B tools/intake_ack.py \
+            --event "$GITHUB_EVENT_PATH" \
+            --comment "$RUNNER_TEMP/ack/reply.md" \
+            --result "$RUNNER_TEMP/ack/result.json"
+
+      - name: Hand the reply across the boundary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: intake-acknowledgement
+          path: ${{ runner.temp }}/ack/
+          if-no-files-found: error
+          retention-days: 7
+
+  reply:
+    name: post the reply
+    needs: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Receive the reply
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: intake-acknowledgement
+          path: ack
+
+      - name: Post it and set the route label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          action="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["action"])' ack/result.json)"
+          if [ "$action" != "reply" ]; then
+            echo "not an intake form submission; nothing posted"
+            exit 0
+          fi
+          label="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["route_label"])' ack/result.json)"
+          case "$label" in
+            route:research|route:assisted) ;;
+            *) echo "::error::unexpected route label"; exit 1 ;;
+          esac
+          gh issue comment "$ISSUE" --repo "$REPO" --body-file ack/reply.md
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label "$label" --remove-label "route:unrouted"
