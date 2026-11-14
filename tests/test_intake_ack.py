@@ -256,6 +256,62 @@ class DraftPinningTest(unittest.TestCase):
         self.assertIn("not a review and not an endorsement", reply)
 
 
+class NextStepTest(unittest.TestCase):
+
+    LINK = f"https://github.com/acme/receipts/blob/{SHA_A}/r1.json"
+
+    def found(self, **extra):
+        net = FakeNet({raw("acme", "receipts", SHA_A, "r1.json"): RECORD})
+        return {**intake_ack.examine(form(self.LINK), fetch=net, login="dana"), "issue_number": 41, **extra}
+
+    def test_the_reply_offers_ready_one_line_answers(self):
+        reply = intake_ack.render(self.found())
+        self.assertIn("Nothing more is needed from you now", reply)
+        self.assertIn("`Do not name me.`", reply)
+
+    def test_the_maintainer_gets_the_skeleton_command_built_from_validated_values(self):
+        command = intake_ack.scaffold_command(self.found())
+        self.assertEqual(command, "gh workflow run proposal-scaffold.yml --repo WEXP-dev/wexp-interop "
+                         "-f slug=<slug> -f title=<title> -f issue=41 -f relation=not-established "
+                         f"-f pins='acme/receipts@{SHA_A}:r1.json'")
+        self.assertNotIn("Sample Receipts", intake_ack.render(self.found()))
+
+    def test_no_command_is_offered_when_a_value_would_need_quoting_or_is_missing(self):
+        found = self.found()
+        self.assertIsNone(intake_ack.scaffold_command({**found, "issue_number": None}))
+        self.assertIsNone(intake_ack.scaffold_command({**found, "issue_number": "41; rm"}))
+        self.assertIsNone(intake_ack.scaffold_command({**found, "files": []}))
+        for path in ("a b.json", "a'$(x).json", "a;b.json"):
+            hostile = [{**found["files"][0], "path": path}]
+            with self.subTest(path=path):
+                self.assertIsNone(intake_ack.scaffold_command({**found, "files": hostile}))
+                self.assertNotIn("gh workflow run", intake_ack.render({**found, "files": hostile}))
+
+
+class PrefillLinkTest(unittest.TestCase):
+
+    def test_an_invitation_link_carries_the_public_answers_and_the_template(self):
+        import prefill_link
+        link = prefill_link.build(name="Example Receipts", example="https://github.com/acme/r/blob/main/r 1.json")
+        self.assertTrue(link.startswith("https://github.com/WEXP-dev/interop-test-lab/issues/new?template=interop-check.yml&"))
+        self.assertIn("title=Interop%20check%3A%20Example%20Receipts", link)
+        self.assertIn("example=https%3A%2F%2Fgithub.com%2Facme%2Fr%2Fblob%2Fmain%2Fr%201.json", link)
+
+    def test_a_link_needs_a_name_and_plain_single_lines(self):
+        import prefill_link
+        for bad in ({"name": ""}, {"name": "x", "source": "a\nb"}, {"name": "x" * 301}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                prefill_link.build(**bad)
+
+    def test_the_fields_a_link_fills_exist_in_the_form(self):
+        import prefill_link
+        form_text = (Path(intake_ack.__file__).resolve().parents[1] / ".github" / "ISSUE_TEMPLATE"
+                     / "interop-check.yml").read_text(encoding="utf-8")
+        for field in prefill_link.FIELDS:
+            self.assertIn(f"    id: {field}\n", form_text)
+        self.assertEqual(form_text.count("required: true"), 2)
+
+
 class InitiatorTest(unittest.TestCase):
 
     LINK = f"https://github.com/acme/receipts/blob/{SHA_A}/r1.json"

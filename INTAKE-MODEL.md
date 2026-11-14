@@ -16,12 +16,20 @@ here instead.
 | 1 | What is the system, specification or project called? | yes | identity, and something to call the case |
 | 2 | Where can it be read about? | no | whether a public source exists at all |
 | 3 | Which version? | no | whether an identity exists that could later be pinned exactly |
-| 4 | What evidence, record or result does it produce? | yes | the thing the whole question is about |
-| 5 | What do you want to find out? | yes | the question being asked, in the asker's words |
+| 4 | What evidence, record or result does it produce? | no | the thing the whole question is about |
+| 5 | What do you want to find out? | no | the question being asked, in the asker's words; blank is read as "what can this evidence support?" |
 | 6 | What do you think that evidence lets you claim? | no | the gap between belief and support is often the finding |
 | 7 | Public example or test material? | no | whether anything can actually be run |
 | 8 | What are you unsure about? | no | frequently the most useful field |
 | 9 | Does this need private handling? | no | routed before any private material moves |
+
+Only the name is required. A submission with a name and one public link is enough for the first
+reply to pin bytes, and the rest is worked out in the conversation.
+
+An adapter may accept answers given in advance. The current one does: the address of the form
+takes `title` and any field by its id (`name`, `source`, `revision`, `example`), so an invitation
+can carry a form that is already filled in. `tools/prefill_link.py` builds such an address. The
+person still reads the form and submits it themselves.
 
 ## How the answers reach the routing rubric
 
