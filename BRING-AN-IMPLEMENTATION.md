@@ -22,6 +22,10 @@ local one described in
 [`docs/REPRESENTATION.md` of wexp-check](https://github.com/WEXP-dev/wexp-check/blob/main/docs/REPRESENTATION.md);
 it is a harness, not a standardized carrier.
 
+A case counts only when the command ends with exit status 0 and prints one JSON
+object of at most 1 MiB with no repeated key. Every component is present: a
+component that is absent is reported as absent and is not read as `null`.
+
 Any language works. If your code needs a build step, say what the command is.
 
 ## How to ask
@@ -36,6 +40,10 @@ job that holds no secret and nothing private, and is started once per case with
 a time limit. A separate job, which never checks out or runs your code, compares
 what it printed with the frozen expectations, component by component, and writes
 a summary: how many cases are equal, and for the rest which components differ.
+
+The separation of jobs is the only isolation relied on. The exit status and the
+printed bytes of each case are recorded in the job where your code runs, so the
+comparison rests on that job having recorded them as they were.
 
 You can also do all of this yourself first: the corpus and the expectations are
 public, and [`tools/appraiser_run.py`](tools/appraiser_run.py) is the same

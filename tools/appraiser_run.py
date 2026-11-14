@@ -25,6 +25,7 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 from pathlib import Path
 
 #: The corpora an implementation is run on, by the digest of their expanded form.
@@ -39,6 +40,7 @@ COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 MAX_OUTPUT_BYTES = 1024 * 1024
 CASE_TIMEOUT_SECONDS = 30
 VERDICTS = ("accept", "downgrade", "reject")
+PROCESS_RE = re.compile(r"^(?:exit -?[0-9]{1,5}|timeout|could not start|output too large)$")
 SET_FIELDS = {"qualifiers", "profile_identifiers", "basis_refs", "reasons", "limitations", "base_findings",
               "qualifier_findings", "recorder_relations", "counter_evidence", "evaluation_scope",
               "profile_evaluation_gaps", "inherited_limitations", "fatal_conditions", "affected_claims",
@@ -97,6 +99,50 @@ def write_inputs(corpora: list[Path], out: Path) -> dict:
     return listing
 
 
+def run_one(arguments: list[str], cwd: Path) -> tuple[str, bytes]:
+    """Start one case and keep at most the output limit plus one byte of what it printed.
+
+    The output is read as it arrives, so an implementation that prints without end is stopped at
+    the limit and does not fill the memory of the job. Standard error is discarded.
+    """
+    try:
+        process = subprocess.Popen(arguments, cwd=str(cwd), stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    except OSError:
+        return "could not start", b""
+    chunks, over = [], threading.Event()
+
+    def drain():
+        size = 0
+        while True:
+            chunk = process.stdout.read1(65536)
+            if not chunk:
+                return
+            keep = chunk[:MAX_OUTPUT_BYTES + 1 - size]
+            chunks.append(keep)
+            size += len(keep)
+            if size > MAX_OUTPUT_BYTES:
+                over.set()
+                process.kill()
+                return
+
+    reader = threading.Thread(target=drain, daemon=True)
+    reader.start()
+    try:
+        code = process.wait(timeout=CASE_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+        reader.join(5)
+        process.stdout.close()
+        return "timeout", b""
+    reader.join(5)
+    process.stdout.close()
+    if over.is_set():
+        return "output too large", b"".join(chunks)
+    return f"exit {code}", b"".join(chunks)
+
+
 def run_cases(inputs: Path, out: Path, entry: str, cwd: Path) -> dict:
     command = shlex.split(entry)
     if not command:
@@ -108,18 +154,34 @@ def run_cases(inputs: Path, out: Path, entry: str, cwd: Path) -> dict:
         for case in cases:
             arguments = command + ["--input", str((inputs / name / f"{case}.input.json").resolve()),
                                    "--profiles", str((inputs / name / f"{case}.profiles.json").resolve())]
-            try:
-                done = subprocess.run(arguments, cwd=str(cwd), capture_output=True,
-                                      timeout=CASE_TIMEOUT_SECONDS)
-                state, printed = f"exit {done.returncode}", done.stdout[:MAX_OUTPUT_BYTES + 1]
-            except subprocess.TimeoutExpired:
-                state, printed = "timeout", b""
-            except OSError:
-                state, printed = "could not start", b""
+            state, printed = run_one(arguments, cwd)
             (out / name / f"{case}.json").write_bytes(printed)
             record[f"{name}/{case}"] = state
     (out / "run.json").write_text(json.dumps(record, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     return record
+
+
+def strict_object(pairs):
+    keys = [k for k, _ in pairs]
+    if len(set(keys)) != len(keys):
+        raise ValueError("repeated key")
+    return dict(pairs)
+
+
+def not_a_number(token):
+    raise ValueError(f"{token} is not JSON")
+
+
+def read_process_record(outputs: Path) -> dict:
+    """The exit state the run step recorded for each case; empty when there is no usable record."""
+    try:
+        descriptor = os.open(outputs / "run.json", os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, "rb") as handle:
+            data = handle.read(MAX_OUTPUT_BYTES + 1)
+        record = json.loads(data, object_pairs_hook=strict_object) if len(data) <= MAX_OUTPUT_BYTES else {}
+    except (OSError, ValueError, RecursionError):
+        return {}
+    return record if type(record) is dict else {}
 
 
 def read_output(path: Path):
@@ -137,28 +199,37 @@ def read_output(path: Path):
     if len(data) > MAX_OUTPUT_BYTES:
         return None, "output too large"
     try:
-        value = json.loads(data)
-    except (ValueError, RecursionError):
-        return None, "output is not JSON"
+        value = json.loads(data, object_pairs_hook=strict_object, parse_constant=not_a_number)
+    except (ValueError, RecursionError) as error:
+        return None, "output repeats a key" if str(error) == "repeated key" else "output is not JSON"
     return (value, None) if type(value) is dict else (None, "output is not a JSON object")
 
 
 def compare(corpora: list[Path], outputs: Path) -> dict:
     report = {"vectors_commit": VECTORS_COMMIT, "sets": {}}
+    processes = read_process_record(outputs)
     for path in corpora:
         corpus = load_corpus(path)
         rows, equal = [], 0
         for case in corpus["cases"]:
             expected = case["expected"]
             observed, problem = read_output(outputs / corpus["id"] / f"{case['id']}.json")
-            row = {"id": case["id"], "expected_verdict": expected.get("verdict")}
-            if problem:
+            state = processes.get(f"{corpus['id']}/{case['id']}")
+            state = state if type(state) is str and PROCESS_RE.match(state) else "not recorded"
+            row = {"id": case["id"], "expected_verdict": expected.get("verdict"), "process": state}
+            if state != "exit 0":
+                # A result printed by a process that did not end normally is not taken as its result.
+                row.update({"equal": False, "problem": f"process: {state}"})
+            elif problem:
                 row.update({"equal": False, "problem": problem})
             else:
-                differing = sorted(k for k in expected if not same({k: expected[k]}, {k: observed.get(k)}))
+                # A component that is absent is not the same as one that is present and null.
+                missing = sorted(k for k in expected if k not in observed)
+                differing = sorted(k for k in expected if k in observed and not same({k: expected[k]}, {k: observed[k]}))
                 extra = len([k for k in observed if k not in expected])
                 verdict = observed.get("verdict")
-                row.update({"equal": not differing and not extra, "differing_components": differing,
+                row.update({"equal": not differing and not missing and not extra, "differing_components": differing,
+                            "missing_components": missing,
                             "components_not_in_the_expectation": extra,
                             "observed_verdict": verdict if verdict in VERDICTS else "other"})
             equal += row["equal"]
@@ -186,7 +257,9 @@ def summary(report: dict, repository: str, commit: str) -> str:
                 returned, where = row["problem"], ""
             else:
                 returned = row["observed_verdict"]
-                where = ", ".join(f"`{c}`" for c in row["differing_components"]) or "components outside the expectation"
+                parts = [f"`{c}`" for c in row["differing_components"]]
+                parts += [f"`{c}` (absent)" for c in row["missing_components"]]
+                where = ", ".join(parts) or "components outside the expectation"
             lines.append(f"| `{name}` / `{row['id']}` | {expected} | {returned} | {where} |")
         if len(different) > 60:
             lines.append(f"| and {len(different) - 60} more | | | |")
@@ -194,7 +267,11 @@ def summary(report: dict, repository: str, commit: str) -> str:
               "This says what this implementation returned on these inputs in this run. A difference is a "
               "finding to look at, about the implementation or about the text, and is not a failure of the run. "
               "The corpus does not claim to be a complete test suite for the specification, so equality on every "
-              "case is not a statement about the implementation beyond these cases. The expectations are public; "
+              "case is not a statement about the implementation beyond these cases. A case counts as equal only "
+              "when the process ended with exit status 0 and printed one JSON object, with no repeated key, that "
+              "has every expected component and no other. The implementation ran in a separate job with no secret; "
+              "that separation is the only isolation relied on, and the exit states are recorded in that same job. "
+              "The expectations are public; "
               "that an implementation was written without reading them is a declaration by its author, which this "
               "run cannot check.", ""]
     return "\n".join(lines)

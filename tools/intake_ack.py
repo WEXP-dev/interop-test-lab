@@ -165,8 +165,19 @@ def relation(login: str | None, repositories: list[tuple[str, str]], fetch, toke
     if not login or not re.fullmatch(NAME, login):
         return {"relation": "not-established", "repository": None}
     for owner, repo in repositories[:MAX_RELATION_REPOSITORIES]:
-        if owner.lower() == login.lower():
-            return {"relation": "repository-owner", "repository": f"{owner}/{repo}"}
+        if owner.lower() != login.lower():
+            continue
+        # The link only names a repository. Ownership is read from the repository's own record,
+        # so a link to a repository that does not exist establishes nothing.
+        data = fetch(f"https://{API_HOST}/repos/{owner}/{repo}", token)
+        try:
+            record = json.loads(data) if data else None
+            holder, full = record["owner"]["login"], record["full_name"]
+        except (ValueError, KeyError, TypeError):
+            continue
+        if (isinstance(holder, str) and holder.lower() == login.lower() and isinstance(full, str)
+                and re.fullmatch(f"{NAME}/{NAME}", full) and full.lower().startswith(login.lower() + "/")):
+            return {"relation": "repository-owner", "repository": full}
     for owner, repo in repositories[:MAX_RELATION_REPOSITORIES]:
         if fetch(f"https://{API_HOST}/orgs/{owner}/public_members/{login}", token) is not None:
             return {"relation": "organization-public-member", "repository": f"{owner}/{repo}"}
