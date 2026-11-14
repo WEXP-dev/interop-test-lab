@@ -59,7 +59,8 @@ class StepsTest(unittest.TestCase):
         bench = self.bench(ENGINE % {**EXPECTED, "substantive_reasons": ["A", "B"]})
         report = bench.go()["sets"]["SET-A"]
         self.assertEqual((report["cases"], report["equal_to_expected"]), (2, 1))
-        self.assertEqual(report["rows"][0]["differing_components"], ["note"])
+        self.assertEqual(report["rows"][0]["missing_components"], ["note"])
+        self.assertEqual(report["rows"][0]["differing_components"], [])
         self.assertTrue(report["rows"][1]["equal"])
 
     def test_the_implementation_is_given_inputs_and_profiles_and_no_expectation(self):
@@ -80,15 +81,56 @@ class StepsTest(unittest.TestCase):
             appraiser_run.write_inputs([bench.corpus], bench.tmp / "in")
 
     def test_output_that_is_missing_or_not_an_object_is_a_named_problem_not_a_crash(self):
-        for engine, problem in (("raise SystemExit(3)\n", "no output"),
+        for engine, problem in (("raise SystemExit(3)\n", "process: exit 3"),
                                 ("print('not json')\n", "output is not JSON"),
                                 ("print('[1, 2]')\n", "output is not a JSON object"),
                                 ("print('[' * 100000)\n", "output is not JSON"),
-                                ("import sys\nsys.stdout.write('x' * (2 * 1024 * 1024))\n", "output too large")):
+                                ("import sys\nsys.stdout.write('x' * (2 * 1024 * 1024))\n", "process: output too large")):
             with self.subTest(problem=problem):
                 rows = self.bench(engine).go()["sets"]["SET-A"]["rows"]
                 self.assertEqual([r.get("problem") for r in rows], [problem, problem])
                 self.assertFalse(any(r["equal"] for r in rows))
+
+    def test_an_absent_component_is_not_the_same_as_a_null_one(self):
+        expected = {**EXPECTED, "supported_claims": None}
+        bench = self.bench(ENGINE % {"verdict": "downgrade", "substantive_reasons": ["A", "B"]})
+        bench.corpus.write_text(json.dumps({"id": "SET-A", "profiles": {}, "cases": [
+            {"id": "C1", "input": {}, "expected": expected}]}), encoding="utf-8")
+        bench.pins = {"SET-A": hashlib.sha256(bench.corpus.read_bytes()).hexdigest()}
+        row = bench.go()["sets"]["SET-A"]["rows"][0]
+        self.assertFalse(row["equal"])
+        self.assertEqual(row["missing_components"], ["supported_claims"])
+        self.assertIn("`supported_claims` (absent)", appraiser_run.summary(
+            {"vectors_commit": "b" * 40, "sets": {"SET-A": {"cases": 1, "equal_to_expected": 0, "rows": [row]}}},
+            "acme/appraiser", "a" * 40))
+
+    def test_a_repeated_key_or_a_non_json_number_is_not_read_as_a_result(self):
+        doubled = 'print(\'{"verdict": "reject", "verdict": "downgrade", "substantive_reasons": ["A", "B"], "supported_claims": []}\')\n'
+        rows = self.bench(doubled).go()["sets"]["SET-A"]["rows"]
+        self.assertEqual(rows[1].get("problem"), "output repeats a key")
+        rows = self.bench('print(\'{"verdict": NaN}\')\n').go()["sets"]["SET-A"]["rows"]
+        self.assertEqual(rows[1].get("problem"), "output is not JSON")
+
+    def test_the_expected_result_from_a_process_that_did_not_end_normally_is_not_equal(self):
+        bench = self.bench(ENGINE % EXPECTED + "raise SystemExit(4)\n")
+        rows = bench.go()["sets"]["SET-A"]["rows"]
+        self.assertEqual(rows[1], {"id": "C2", "expected_verdict": "downgrade", "process": "exit 4",
+                                   "equal": False, "problem": "process: exit 4"})
+
+    def test_without_the_record_of_the_run_nothing_is_equal(self):
+        bench = self.bench(ENGINE % EXPECTED)
+        bench.go()
+        (bench.tmp / "out" / "run.json").write_text('{"SET-A/C2": "exit 0; all good"}', encoding="utf-8")
+        with mock.patch.dict(appraiser_run.CORPORA, bench.pins, clear=True):
+            rows = appraiser_run.compare([bench.corpus], bench.tmp / "out")["sets"]["SET-A"]["rows"]
+        self.assertEqual([r["problem"] for r in rows], ["process: not recorded"] * 2)
+
+    def test_output_without_end_is_stopped_at_the_limit(self):
+        bench = self.bench("import sys\nwhile True:\n    sys.stdout.write('x' * 65536)\n")
+        with mock.patch.object(appraiser_run, "CASE_TIMEOUT_SECONDS", 20):
+            state, printed = appraiser_run.run_one([sys.executable, "-I", "-B", "engine.py"], bench.tmp / "impl")
+        self.assertEqual(state, "output too large")
+        self.assertEqual(len(printed), appraiser_run.MAX_OUTPUT_BYTES + 1)
 
     def test_an_extra_component_is_not_equal(self):
         rows = self.bench(ENGINE % {**EXPECTED, "extra": 1}).go()["sets"]["SET-A"]["rows"]

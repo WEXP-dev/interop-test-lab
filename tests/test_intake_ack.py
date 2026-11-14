@@ -264,12 +264,20 @@ class InitiatorTest(unittest.TestCase):
         return {raw("acme", "receipts", SHA_A, "r1.json"): RECORD, **extra}
 
     def test_the_owner_of_a_linked_repository_is_recognised_without_a_request(self):
-        net = FakeNet(self.pages())
+        net = FakeNet(self.pages(**{"https://api.github.com/repos/acme/receipts": json.dumps(
+            {"full_name": "acme/receipts", "owner": {"login": "acme"}}).encode()}))
         found = intake_ack.examine(form(self.LINK), fetch=net, login="Acme")
         self.assertEqual(found["initiator"],
                          {"relation": "repository-owner", "repository": "acme/receipts"})
-        self.assertEqual(len(net.asked), 1)
+        self.assertEqual(len(net.asked), 2)
         self.assertIn("owns `acme/receipts`", intake_ack.render(found))
+
+    def test_ownership_is_read_from_the_repository_record_not_from_the_link(self):
+        for record in (None, b"not json", json.dumps({"full_name": "other/receipts", "owner": {"login": "other"}}).encode()):
+            with self.subTest(record=record):
+                extra = {} if record is None else {"https://api.github.com/repos/acme/receipts": record}
+                found = intake_ack.examine(form(self.LINK), fetch=FakeNet(self.pages(**extra)), login="acme")
+                self.assertEqual(found["initiator"], {"relation": "not-established", "repository": None})
 
     def test_a_public_member_of_the_owning_organization_is_recognised(self):
         net = FakeNet(self.pages(**{"https://api.github.com/orgs/acme/public_members/dana": b""}))
