@@ -55,8 +55,14 @@ in an Internet-Draft, name the draft with its revision, such as
 everything after that refers to those bytes.
 
 **Do not send secrets, credentials, private keys, tokens, or confidential
-material.** The form is a public issue. If your case needs private handling, say
-so — and send nothing private until we confirm whether a suitable route is available.
+material.** The form is a public issue.
+
+**Two tracks.** On the open track everything is public: your links, the mapping,
+the runs and the result. On the [private track](PRIVATE-TRACK.md) the material
+goes by email, the work is done outside public repositories, and nothing about it
+is published unless you agree. To choose the private track, tick the box in the
+form and send nothing private; a maintainer first confirms that the case can go
+there.
 
 ## What happens after you submit
 

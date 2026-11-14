@@ -146,12 +146,17 @@ class ColdRead(unittest.TestCase):
         self.assertNotIn("bring any system that produces a record", flat)
         self.assertIn("whether it can be run automatically depends on the route", flat)
 
-    def test_private_route_is_not_described_as_an_existing_service(self):
+    def test_the_private_track_is_described_and_confirmed_before_any_material_moves(self):
         for doc, name in ((START, "START-HERE"), (FORM, "the form")):
             flat = plain(doc)
             self.assertNotIn("we will arrange a private route", flat)
-            self.assertNotIn("we will arrange a route first", flat)
-            self.assertIn("confirm whether a suitable route is available", flat, name)
+            self.assertIn("private track", flat, name)
+            self.assertIn("first confirms that the case can go", flat, name)
+            self.assertIn("send nothing private", flat, name)
+        track = plain((ROOT / "PRIVATE-TRACK.md").read_text(encoding="utf-8"))
+        for promise in ("nothing at all", "sha-256 of the material", "no response-time commitment",
+                        "no confidentiality agreement", "before either appraiser runs"):
+            self.assertIn(promise, track)
 
     def test_no_response_time_is_promised(self):
         flat = plain(START)
@@ -256,7 +261,7 @@ class ColdRead(unittest.TestCase):
     def test_intake_never_asks_for_private_material(self):
         for term in ("private key", "credential", "token", "password", "secret value"):
             self.assertNotIn(f"label: {term}", FORM.lower())
-        self.assertIn("we will first confirm whether a suitable route is available", plain(FORM))
+        self.assertIn("a maintainer first confirms that the case can go", plain(FORM))
 
     def test_readme_points_a_newcomer_out_before_the_engine_room(self):
         head = "\n".join(README.splitlines()[:6])
