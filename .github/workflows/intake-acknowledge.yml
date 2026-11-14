@@ -8,7 +8,7 @@ name: Intake acknowledgement
 # the reply. It holds a read-only token, so nothing a submitter writes can reach
 # a write credential. `reply` holds the write permission and never sees the
 # submission: it posts the file `read` produced, or replaces its own earlier
-# reply with it, and on a new submission sets one of two fixed labels. To find
+# reply with it, and sets one of two fixed route labels to match the reply. To find
 # its earlier reply it asks only for the number of a comment written by the
 # workflow account that starts with a fixed marker; no comment text is read.
 #
@@ -108,6 +108,12 @@ jobs:
             *[!0-9]*) echo "::error::unexpected comment number"; exit 1 ;;
             *) gh api --method PATCH "repos/$REPO/issues/comments/$earlier" -F body=@ack/reply.md --silent ;;
           esac
-          if [ "$event" = "opened" ]; then
-            gh issue edit "$ISSUE" --repo "$REPO" --add-label "$label" --remove-label "route:unrouted"
-          fi
+          # The route label always says what the latest reply says. On an accepted edit the
+          # route can change, so the other fixed route label is removed with it.
+          case "$label" in
+            route:research) other="route:assisted" ;;
+            route:assisted) other="route:research" ;;
+          esac
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label "$label" --remove-label "route:unrouted" --remove-label "$other"
+          echo "### Intake acknowledgement" >> "$GITHUB_STEP_SUMMARY"
+          echo "- event: $event; reply: posted or replaced; route label: $label" >> "$GITHUB_STEP_SUMMARY"

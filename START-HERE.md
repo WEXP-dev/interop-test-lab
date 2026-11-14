@@ -62,7 +62,7 @@ so — and send nothing private until we confirm whether a suitable route is ava
 
 **An automatic reply arrives within minutes.** It lists the public files it could
 pin from your links (repository, commit, path, SHA-256 and size) and names the
-route. Nobody has read your submission at that point; the reply says so. If you
+route. The reply is produced by a script and is not a human review; it says so. If you
 edit your submission, for example to add a link, the reply updates itself.
 
 The reply also says what GitHub shows about the account that opened the check:

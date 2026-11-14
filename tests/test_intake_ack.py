@@ -276,11 +276,24 @@ class NextStepTest(unittest.TestCase):
                          f"-f pins='acme/receipts@{SHA_A}:r1.json'")
         self.assertNotIn("Sample Receipts", intake_ack.render(self.found()))
 
+    def test_the_command_carries_the_draft_pins_shown_in_the_reply(self):
+        net = FakeNet({raw("acme", "receipts", SHA_A, "r1.json"): RECORD,
+                       "https://www.ietf.org/archive/id/draft-ietf-rats-ear-04.txt": b"draft text"})
+        found = {**intake_ack.examine(form(self.LINK + " draft-ietf-rats-ear-04"), fetch=net, login="dana"),
+                 "issue_number": 41}
+        command = intake_ack.scaffold_command(found)
+        self.assertIn(f"-f pins='acme/receipts@{SHA_A}:r1.json'", command)
+        self.assertTrue(command.endswith("-f drafts='draft-ietf-rats-ear-04'"))
+        only_draft = {**found, "files": []}
+        self.assertNotIn("-f pins", intake_ack.scaffold_command(only_draft))
+        self.assertIsNone(intake_ack.scaffold_command(
+            {**found, "drafts": [{"name": "draft-x; rm", "rev": "04", "sha256": "0" * 64, "bytes": 1}]}))
+
     def test_no_command_is_offered_when_a_value_would_need_quoting_or_is_missing(self):
         found = self.found()
         self.assertIsNone(intake_ack.scaffold_command({**found, "issue_number": None}))
         self.assertIsNone(intake_ack.scaffold_command({**found, "issue_number": "41; rm"}))
-        self.assertIsNone(intake_ack.scaffold_command({**found, "files": []}))
+        self.assertIsNone(intake_ack.scaffold_command({**found, "files": [], "drafts": []}))
         for path in ("a b.json", "a'$(x).json", "a;b.json"):
             hostile = [{**found["files"][0], "path": path}]
             with self.subTest(path=path):
@@ -446,7 +459,7 @@ class RoutingTest(unittest.TestCase):
         reply = intake_ack.render(intake_ack.examine(form(), fetch=FakeNet({})))
         self.assertIn("No response-time commitment is offered", reply)
         self.assertIn("nothing runs automatically", reply)
-        self.assertIn("nobody has read your submission yet", reply)
+        self.assertIn("is not a human review", reply)
 
     def test_the_reply_makes_no_conformance_statement(self):
         reply = intake_ack.render(intake_ack.examine(form(), fetch=FakeNet({}))).lower()
@@ -472,9 +485,12 @@ class WorkflowShapeTest(unittest.TestCase):
         self.assertIn("| .id'", reply)
         self.assertIn('*[!0-9]*) echo "::error::unexpected comment number"', reply)
 
-    def test_labels_are_set_only_for_a_new_submission(self):
+    def test_the_route_label_follows_the_latest_reply_and_the_other_one_is_removed(self):
         reply = self.jobs["reply"].text
-        self.assertLess(reply.index('if [ "$event" = "opened" ]'), reply.index("gh issue edit"))
+        self.assertNotIn('if [ "$event" = "opened" ]', reply)
+        self.assertIn('route:research) other="route:assisted" ;;', reply)
+        self.assertIn('route:assisted) other="route:research" ;;', reply)
+        self.assertIn('--add-label "$label" --remove-label "route:unrouted" --remove-label "$other"', reply)
 
     def test_the_job_that_reads_the_submission_cannot_write(self):
         self.assertEqual(set(self.jobs), {"read", "reply"})
