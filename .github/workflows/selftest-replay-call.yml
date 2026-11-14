@@ -1,0 +1,10 @@
+name: Self-test of the reusable replay workflow (temporary, not for merge)
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/selftest-replay-call.yml'
+permissions:
+  contents: read
+jobs:
+  replay:
+    uses: WEXP-dev/wexp-check/.github/workflows/replay.yml@9ce2adc402541e0d4c8c844e3205ea4571ecf6a5
